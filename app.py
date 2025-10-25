@@ -12,7 +12,7 @@ st.set_page_config(page_title="📈 MA Cross Monitor", layout="wide")
 st.title("📈 이동평균선 교차 모니터링 시스템")
 
 # ✅ 분석 대상 종목 리스트
-tickers = [
+TICKERS = [
     "AAPL", "ABB", "ABCL", "ACHR", "AEP",
     "AES", "ALAB", "AMD", "AMZN", "ANET", "ARQQ", "ARRY", "ASML", "ASTS", "AVGO",
     "BA", "BAC", "BE", "BEP", "BLK", "BMNR", "BP", "BTQ", "BWXT", "C", "CARR",
