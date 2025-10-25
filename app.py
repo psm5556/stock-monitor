@@ -12,7 +12,7 @@ import plotly.graph_objects as go
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 CHAT_ID = os.environ.get('CHAT_ID')
 
-MA_LIST = [200, 240, 365]
+MA_LIST = [20, 200, 240, 365]
 TOLERANCE = 0.01  # ✅ 근접 임계값 ±1%
 
 st.set_page_config(page_title="📈 장기 MA 접근 모니터", layout="wide")
@@ -65,10 +65,30 @@ def get_price(symbol, interval="1d"):
     return df if not df.empty else None
 
 
+# def is_downtrend(df, lookback=20):
+#     if len(df) < lookback + 1:
+#         return False
+#     return (df["Close"].iloc[-1] - df["Close"].iloc[-lookback]) < 0
+
 def is_downtrend(df, lookback=20):
+    ma_col = "MA20"
+    
+    # MA20이 없다면 False
+    if ma_col not in df.columns:
+        return False
+
+    # 데이터 부족하면 False
     if len(df) < lookback + 1:
         return False
-    return (df["Close"].iloc[-1] - df["Close"].iloc[-lookback]) < 0
+
+    # MA20 기준 하락 추세 판정
+    ma_now = df[ma_col].iloc[-1]
+    ma_before = df[ma_col].iloc[-lookback]
+
+    if pd.isna(ma_now) or pd.isna(ma_before):
+        return False
+
+    return ma_now < ma_before
 
 
 # ✅ 근접/하향이탈 중복 감지 허용
