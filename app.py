@@ -36,11 +36,10 @@ def get_company_names(tickers):
         name = info.get("longName", info.get("shortName", t))
         data.append((t, name))
     df = pd.DataFrame(data, columns=["Symbol","Name"])
-    return df.sort_values("Name")  # ✅ 기업명 기준 정렬
+    return df.sort_values("Name")
 
 company_df = get_company_names(tickers)
 
-# ✅ Sidebar — 선택 UI
 st.sidebar.subheader("🔍 종목 선택")
 options = {f"{row['Name']} ({row['Symbol']})": row['Symbol'] for _, row in company_df.iterrows()}
 selected_key = st.sidebar.selectbox("Select Company", list(options.keys()))
@@ -51,20 +50,15 @@ interval_map = {"일봉 (1d)": "1d", "주봉 (1wk)": "1wk"}
 selected_interval = interval_map[interval]
 
 
-# ✅ 주가 + MA 계산
 def load_data(symbol, interval):
     period = "3y" if interval == "1d" else "10y"
     df = yf.Ticker(symbol).history(period=period, interval=interval)
-
     if df.empty: return df
-
     for p in [200,240,365]:
         df[f"MA{p}"] = df["Close"].rolling(p).mean()
-
     return df.dropna()
 
 
-# ✅ 교차 감지 함수
 def detect_cross(df):
     result = []
     for p in [200,240,365]:
@@ -76,15 +70,13 @@ def detect_cross(df):
     return result
 
 
-# ✅ Telegram 전송
-def send_telegram(text):
+def send_telegram(msg):
     if not BOT_TOKEN or not CHAT_ID: return
     import requests
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    requests.post(url, json={"chat_id": CHAT_ID, "text": text})
+    requests.post(url, json={"chat_id": CHAT_ID, "text": msg})
 
 
-# ✅ 전체 종목 교차 검사 + 알림
 cross_alerts = []
 for _, row in company_df.iterrows():
     sym = row["Symbol"]
@@ -92,25 +84,25 @@ for _, row in company_df.iterrows():
     if df.empty: continue
     crosses = detect_cross(df)
     if crosses:
-        msg = f"🚨 {row['Name']} ({sym})\n" + "\n".join([f"{ma} {d}" for ma,d in crosses])
-        cross_alerts.append(msg)
+        formatted = "\n".join([f"{ma} {d}" for ma, d in crosses])
+        cross_alerts.append(f"{row['Name']} ({sym})\n{formatted}")
 
 if cross_alerts:
+    st.error("🚨 교차 발견 종목 존재")
     for alert in cross_alerts:
-        st.error(alert)
-        send_telegram(alert)
+        st.warning(alert)
+
+    telegram_message = "🚨 이동평균선 교차 감지 종목 리스트\n\n" + "\n\n".join(cross_alerts)
+    send_telegram(telegram_message)
+
 else:
     st.success("✅ 전체 종목에 최근 이동평균선 교차 없음")
 
 
-# ✅ 선택한 종목 차트만 표시
 df = load_data(selected_symbol, selected_interval)
-
 if df.empty:
     st.error("⚠ 데이터 조회 실패")
 else:
-    company = yf.Ticker(selected_symbol).info.get("longName", selected_symbol)
-
     fig = go.Figure()
 
     fig.add_trace(go.Candlestick(
@@ -130,7 +122,7 @@ else:
     )
 
     fig.update_layout(
-        title=f"{company} ({selected_symbol}) — {selected_interval}",
+        title=f"{selected_key} — {selected_interval}",
         height=650, xaxis_rangeslider_visible=False,
         showlegend=True
     )
