@@ -173,110 +173,54 @@ def detect_signals_for_symbol(symbol: str) -> dict:
     return out
 
 
-def build_alert_message(results: list[dict]) -> str:
+def build_and_send_messages(results: list[dict]):
     KST = pytz.timezone("Asia/Seoul")
     ts = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
-    header = f"📬 [수동] 장기 MA 접근 감지 결과 ({ts})\n"
 
-    daily_msg = ""
-    weekly_msg = ""
-    has_daily = False
-    has_weekly = False
+    # 메시지별 버퍼
+    near_daily = ""
+    near_weekly = ""
+    below_daily = ""
+    below_weekly = ""
 
     for r in results:
         sym = r["symbol"]
         name = r["name"]
 
         if r["daily"]:
-            has_daily = True
-            daily_msg += f"- {name} ({sym})\n"
             for p, gap, status in r["daily"]:
-                emoji = "✅" if status == "근접" else "🔻"
-                daily_msg += f"   {emoji} MA{p} {status} ({gap:+.2f}%)\n"
+                line = f"   {'✅' if status=='근접' else '🔻'} MA{p} ({gap:+.2f}%)\n"
+                if status == "근접":
+                    near_daily += f"- {name} ({sym})\n" + line
+                else:
+                    below_daily += f"- {name} ({sym})\n" + line
 
         if r["weekly"]:
-            has_weekly = True
-            weekly_msg += f"- {name} ({sym})\n"
             for p, gap, status in r["weekly"]:
-                emoji = "✅" if status == "근접" else "🔻"
-                weekly_msg += f"   {emoji} MA{p} {status} ({gap:+.2f}%)\n"
+                line = f"   {'✅' if status=='근접' else '🔻'} MA{p} ({gap:+.2f}%)\n"
+                if status == "근접":
+                    near_weekly += f"- {name} ({sym})\n" + line
+                else:
+                    below_weekly += f"- {name} ({sym})\n" + line
 
-    msg = header
-    if has_daily:
-        msg += "\n📅 Daily\n" + daily_msg
-    if has_weekly:
-        msg += "\n🗓 Weekly\n" + weekly_msg
-    if not (has_daily or has_weekly):
-        msg += "\n이번 스캔에서는 감지된 종목이 없습니다."
+    # ✅ 메시지 전송 함수
+    def send_block(title, daily, weekly):
+        if not daily and not weekly:
+            return False
+        
+        msg = f"{title} ({ts})\n"
+        if daily:
+            msg += "\n📅 Daily\n" + daily
+        if weekly:
+            msg += "\n🗓 Weekly\n" + weekly
 
-    if len(msg) > 3800:
-        msg = msg[:3700] + "\n…(내용 축약)"
+        send_telegram(msg)
+        return True
 
-    return msg
+    # ✅ 실제 전송
+    send_block("📬 장기 MA 근접 감지", near_daily, near_weekly)
+    send_block("📉 장기 MA 하향이탈 감지", below_daily, below_weekly)
 
-
-# =========================
-# Telegram 전송 (한 번에 묶어서 1건)
-# =========================
-def send_telegram_message(text: str) -> bool:
-    try:
-        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-        r = requests.post(url, json={"chat_id": CHAT_ID, "text": text})
-        ok = (r.status_code == 200)
-        if not ok:
-            print("Telegram error:", r.text)
-        return ok
-    except Exception as e:
-        print("Telegram exception:", str(e))
-        return False
-
-def build_alert_message(results: list[dict]) -> str:
-    # ✅ timestamp
-    KST = pytz.timezone("Asia/Seoul")
-    timestamp = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
-    
-    header = f"📬 장기 MA 접근 감지 결과 ({timestamp})\n"
-
-    # ✅ 초기화 (UnboundLocalError 방지)
-    daily_msg = ""
-    weekly_msg = ""
-    has_daily = False
-    has_weekly = False
-
-    for r in results:
-        sym = r["symbol"]
-        name = r["name"]
-
-        # ✅ Daily
-        if r["daily"]:
-            has_daily = True
-            daily_msg += f"- {name} ({sym})\n"
-            for p, gap, status in r["daily"]:
-                emoji = "✅" if status == "근접" else "🔻"
-                daily_msg += f"   {emoji} MA{p} {status} ({gap:+.2f}%)\n"
-
-        # ✅ Weekly
-        if r["weekly"]:
-            has_weekly = True
-            weekly_msg += f"- {name} ({sym})\n"
-            for p, gap, status in r["weekly"]:
-                emoji = "✅" if status == "근접" else "🔻"
-                weekly_msg += f"   {emoji} MA{p} {status} ({gap:+.2f}%)\n"
-
-    # ✅ 메시지 조합
-    msg = header
-    if has_daily:
-        msg += "\n📅 Daily\n" + daily_msg
-    if has_weekly:
-        msg += "\n🗓 Weekly\n" + weekly_msg
-    if not (has_daily or has_weekly):
-        msg += "감지된 종목 없음\n"
-
-    # ✅ Telegram 최대 길이 보호
-    if len(msg) > 3800:
-        msg = msg[:3700] + "\n…(내용 축약)"
-
-    return msg
 
 
 # =========================
