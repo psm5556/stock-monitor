@@ -59,8 +59,8 @@ def get_price(symbol, interval="1d"):
 
     df = df[["Open", "High", "Low", "Close", "Volume"]].copy()
     for p in MA_LIST:
-        # df[f"MA{p}"] = df["Close"].rolling(p).mean()
-        df[f"MA{p}"] = df["Close"].rolling(p, min_periods=1).mean()
+        df[f"MA{p}"] = df["Close"].rolling(p).mean()
+        # df[f"MA{p}"] = df["Close"].rolling(p, min_periods=1).mean()
     # df.dropna(inplace=True)
     return df if not df.empty else None
 
@@ -89,48 +89,48 @@ def is_downtrend(df, lookback=20):
 
 
 # ✅ 근접/하향이탈 중복 감지 허용
+def detect_ma_touch(df):
+    touches = []
+    last = df.iloc[-1]
+    
+    for p in MA_LIST:
+        ma = last[f"MA{p}"]
+        if pd.isna(ma): continue
+
+        close = last["Close"]
+        gap = (close - ma) / ma
+
+        # 근접 조건
+        if abs(gap) <= TOLERANCE:
+            touches.append((p, round(gap*100,2), "근접"))
+
+        # 하향이탈 조건 (근접과 중복 허용)
+        if close < ma:
+            touches.append((p, round(gap*100,2), "하향이탈"))
+
+#     return touches
+
 # def detect_ma_touch(df):
 #     touches = []
 #     last = df.iloc[-1]
-    
-#     for p in MA_LIST:
-#         ma = last[f"MA{p}"]
-#         if pd.isna(ma): continue
 
-#         close = last["Close"]
+#     close = last["Close"]
+
+#     for p in MA_LIST:
+#         ma_col = f"MA{p}"
+#         if ma_col not in last or pd.isna(last[ma_col]):
+#             continue
+
+#         ma = last[ma_col]
 #         gap = (close - ma) / ma
 
-#         # 근접 조건
 #         if abs(gap) <= TOLERANCE:
 #             touches.append((p, round(gap*100,2), "근접"))
 
-#         # 하향이탈 조건 (근접과 중복 허용)
 #         if close < ma:
 #             touches.append((p, round(gap*100,2), "하향이탈"))
 
 #     return touches
-
-def detect_ma_touch(df):
-    touches = []
-    last = df.iloc[-1]
-
-    close = last["Close"]
-
-    for p in MA_LIST:
-        ma_col = f"MA{p}"
-        if ma_col not in last or pd.isna(last[ma_col]):
-            continue
-
-        ma = last[ma_col]
-        gap = (close - ma) / ma
-
-        if abs(gap) <= TOLERANCE:
-            touches.append((p, round(gap*100,2), "근접"))
-
-        if close < ma:
-            touches.append((p, round(gap*100,2), "하향이탈"))
-
-    return touches
 
 
 def detect_symbol(symbol):
