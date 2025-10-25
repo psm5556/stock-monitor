@@ -28,6 +28,8 @@ available_tickers = [
     "TMO", "TSLA", "TSM", "TWST", "UBT", "UNH", "V", "VLO", "VRT", "VST", "WMT", "HON", "TXG", "XOM", "ZPTA"
 ]
 
+MA_LIST = [200,240,365]
+
 @st.cache_data(ttl=86400)
 def get_company_name(symbol):
     try:
