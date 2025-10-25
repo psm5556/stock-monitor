@@ -1,82 +1,94 @@
 import streamlit as st
 import pandas as pd
 import yfinance as yf
-import datetime as dt
+import datetime
+import requests
+import time
 
-st.set_page_config(page_title="📈 이동평균선 교차 모니터링", layout="wide")
-st.title("📈 이동평균선 교차 모니터링 대시보드 (Daily & Weekly)")
+# -------------------
+# 📱 텔레그램 설정
+# -------------------
+TELEGRAM_TOKEN = "여기에_봇_토큰_입력"
+TELEGRAM_CHAT_ID = "여기에_chat_id_입력"
 
-# 미리 지정된 모니터링 대상 (필요시 여기를 수정하세요)
-TICKERS = ["AAPL", "MSFT", "NVDA", "TSLA", "GOOG"]
-PERIODS = [200, 240, 365]
+def send_telegram_message(message):
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    params = {"chat_id": TELEGRAM_CHAT_ID, "text": message}
+    try:
+        requests.get(url, params=params)
+    except Exception as e:
+        st.error(f"텔레그램 전송 실패: {e}")
 
+# -------------------
+# 📊 데이터 불러오기 (캐시)
+# -------------------
 @st.cache_data(ttl=3600)
-def get_data(ticker, interval="1d"):
-    # period=2y를 사용하여 충분한 이동평균 계산 범위를 확보합니다.
-    data = yf.download(ticker, period="2y", interval=interval, progress=False)
-    for p in PERIODS:
-        data[f"MA{p}"] = data["Close"].rolling(p).mean()
+def get_data(symbol):
+    data = yf.download(symbol, period="2y")
+    if data.empty:
+        return pd.DataFrame()
+    data["MA200"] = data["Close"].rolling(200).mean()
+    data["MA240"] = data["Close"].rolling(240).mean()
+    data["MA365"] = data["Close"].rolling(365).mean()
     return data
 
-col1, col2 = st.columns([1, 3])
-with col1:
-    selected = st.selectbox("📊 종목 선택", TICKERS)
-    st.write("모니터링 대상 티커는 app.py 내부의 TICKERS 리스트를 수정하여 변경할 수 있습니다.")
-with col2:
-    st.write("최근 주가 및 이동평균선 (일/주 단위)")
+@st.cache_data(ttl=3600)
+def get_weekly_data(symbol):
+    data = yf.download(symbol, period="5y", interval="1wk")
+    if data.empty:
+        return pd.DataFrame()
+    data["MA200"] = data["Close"].rolling(200).mean()
+    data["MA240"] = data["Close"].rolling(240).mean()
+    data["MA365"] = data["Close"].rolling(365).mean()
+    return data
 
-# 일간 데이터
-daily = get_data(selected, "1d")
+# -------------------
+# ⚙️ Streamlit UI
+# -------------------
+st.set_page_config(page_title="📈 이동평균선 감시 알림", layout="wide")
+st.title("📈 이동평균선 감시 대시보드 (일봉 + 주봉)")
 
-if daily.empty or "Close" not in daily.columns:
-    st.warning("⚠️ 주가 데이터를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.")
-else:
-    st.subheader("📅 일 단위 (Daily) 차트")
-    cols = [c for c in ["Close", "MA200", "MA240", "MA365"] if c in daily.columns]
-    if len(cols) > 1:
-        st.line_chart(daily[cols].dropna())
+stocks = ["AAPL", "MSFT", "NVDA", "GOOG", "AMZN", "META", "TSLA"]  # 미리 등록된 기업 리스트
+alert_triggered = []
+
+for symbol in stocks:
+    st.subheader(f"📊 {symbol}")
+
+    # 일봉 데이터
+    daily = get_data(symbol)
+    if not daily.empty:
+        st.line_chart(daily[["Close", "MA200", "MA240", "MA365"]].dropna())
+        last = daily.iloc[-1]
+        for ma in ["MA200", "MA240", "MA365"]:
+            if abs(last["Close"] - last[ma]) / last[ma] < 0.001:  # 0.1% 이내 접근 시
+                msg = f"⚠️ {symbol} 일봉이 {ma}({last[ma]:.2f})와 만남!"
+                alert_triggered.append(msg)
     else:
-        st.info("이동평균 데이터를 계산할 수 없습니다.")
+        st.warning(f"{symbol} 일봉 데이터 없음")
 
-# 주간 데이터
-weekly = get_data(selected, "1wk")
-if weekly.empty or "Close" not in weekly.columns:
-    st.warning("⚠️ 주간 데이터를 불러오지 못했습니다.")
-else:
-    st.subheader("🗓️ 주 단위 (Weekly) 차트")
-    cols = [c for c in ["Close", "MA200", "MA240", "MA365"] if c in weekly.columns]
-    if len(cols) > 1:
-        st.line_chart(weekly[cols].dropna())
+    # 주봉 데이터
+    weekly = get_weekly_data(symbol)
+    if not weekly.empty:
+        st.line_chart(weekly[["Close", "MA200", "MA240", "MA365"]].dropna())
+        last_w = weekly.iloc[-1]
+        for ma in ["MA200", "MA240", "MA365"]:
+            if abs(last_w["Close"] - last_w[ma]) / last_w[ma] < 0.001:
+                msg = f"⚠️ {symbol} 주봉이 {ma}({last_w[ma]:.2f})와 만남!"
+                alert_triggered.append(msg)
     else:
-        st.info("이동평균 데이터를 계산할 수 없습니다.")
+        st.warning(f"{symbol} 주봉 데이터 없음")
 
-# 교차 감지 함수
-def detect_cross(data):
-    cross = []
-    # 최근 2개 캔들(바)을 비교하여 교차(상향/하향)를 판단합니다.
-    if len(data) < 2:
-        return cross
-    for p in PERIODS:
-        col = f"MA{p}"
-        if col not in data.columns:
-            continue
-        if data['Close'].iloc[-2] < data[col].iloc[-2] and data['Close'].iloc[-1] >= data[col].iloc[-1]:
-            cross.append((p, '상향'))
-        elif data['Close'].iloc[-2] > data[col].iloc[-2] and data['Close'].iloc[-1] <= data[col].iloc[-1]:
-            cross.append((p, '하향'))
-    return cross
+st.divider()
 
-daily_cross = detect_cross(daily)
-weekly_cross = detect_cross(weekly)
-
-if daily_cross or weekly_cross:
-    msg_lines = []
-    if daily_cross:
-        msg_lines.append("일 단위: " + ", ".join([f"{p}일선({dir})" for p,dir in daily_cross]))
-    if weekly_cross:
-        msg_lines.append("주 단위: " + ", ".join([f"{p}주선({dir})" for p,dir in weekly_cross]))
-    st.error("🚨 교차 발생 — " + " / ".join(msg_lines))
+# -------------------
+# 🔔 알림 전송
+# -------------------
+if alert_triggered:
+    st.error("🚨 조건 충족! 알림 전송 중...")
+    for msg in alert_triggered:
+        send_telegram_message(msg)
+        st.write(msg)
 else:
-    st.success("✅ 최근 교차 없음")
+    st.success("✅ 현재 모든 종목은 기준선과 거리 있음")
 
-st.caption(f"마지막 업데이트: {dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+st.caption("10분마다 자동 실행 시, Streamlit Cloud Scheduler 또는 외부 cron으로 반복 가능")
