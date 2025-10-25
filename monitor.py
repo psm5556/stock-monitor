@@ -15,7 +15,7 @@ CHAT_ID = os.environ.get("CHAT_ID")
 # 감지 기본 설정
 # =========================
 MA_LIST = [200, 240, 365]
-TOLERANCE = 0.05  # ✅ 근접 임계값 ±1%
+TOLERANCE = 0.01  # ✅ 근접 임계값 ±1%
 
 TICKERS = [
     "AAPL","ABCL","ACHR","AEP","AES","ALAB","AMD","AMZN","ANET","ARQQ","ARRY","ASML",
@@ -89,15 +89,34 @@ def detect_ma_touch(df):
     return touches
 
 
+# def detect_symbol(symbol):
+#     name = get_company_name(symbol)
+#     result = {"symbol":symbol,"name":name,"daily":[],"weekly":[]}
+
+#     for itv, key in [("1d","daily"),("1wk","weekly")]:
+#         df = get_price(symbol,itv)
+#         if df is not None and is_downtrend(df):
+#             res = detect_ma_touch(df)
+#             if res: result[key] = res
+
+#     return result
+
 def detect_symbol(symbol):
     name = get_company_name(symbol)
     result = {"symbol":symbol,"name":name,"daily":[],"weekly":[]}
 
     for itv, key in [("1d","daily"),("1wk","weekly")]:
+
         df = get_price(symbol,itv)
-        if df is not None and is_downtrend(df):
-            res = detect_ma_touch(df)
-            if res: result[key] = res
+        if df is None or len(df) < max(MA_LIST) + 1:
+            continue
+
+        # ❌ 기존: is_downtrend(df) 필터 → 누락 발생
+        # ✅ 모든 경우 감지
+        res = detect_ma_touch(df)
+
+        if res:
+            result[key] = res
 
     return result
 
