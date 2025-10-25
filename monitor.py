@@ -87,12 +87,18 @@ def detect_ma_touch(df, tolerance=0.005):
 
         close_price = last["Close"]
         ma_value = last[col]
-        gap = abs(close_price - ma_value) / ma_value
-        is_near = gap <= tolerance
-        is_below = close_price < ma_value
+        gap = (close_price - ma_value) / ma_value
+        abs_gap = abs(gap)
 
-        if is_near or is_below:
-            touches.append((p, round(gap*100, 2))) # ✅ gap % 포함 반환
+        # 조건 분리
+        if abs_gap <= tolerance:
+            status = "근접"   # Close ≈ MA
+        elif close_price < ma_value:
+            status = "하향이탈"  # Close < MA
+        else:
+            continue
+
+        touches.append((p, round(gap * 100, 2), status))
 
     return touches
 
@@ -129,15 +135,18 @@ for sym in TICKERS:
 
     if r["daily"]:
         has_daily = True
-        line = f"- {r['name']} ({sym}): "
-        line += ", ".join([f"MA{p}({gap}%)" for p, gap in r["daily"]]) + "\n"
-        daily_msg += line
-
+        daily_msg += f"- {r['name']} ({sym})\n"
+        for p, gap, status in r["daily"]:
+            emoji = "✅" if status == "근접" else "🔻"
+            daily_msg += f"   {emoji} MA{p} {status} ({gap:+.2f}%)\n"
+    
     if r["weekly"]:
         has_weekly = True
-        line = f"- {r['name']} ({sym}): "
-        line += ", ".join([f"MA{p}({gap}%)" for p, gap in r["weekly"]]) + "\n"
-        weekly_msg += line
+        weekly_msg += f"- {r['name']} ({sym})\n"
+        for p, gap, status in r["weekly"]:
+            emoji = "✅" if status == "근접" else "🔻"
+            weekly_msg += f"   {emoji} MA{p} {status} ({gap:+.2f}%)\n"
+
 
 
 msg = header
