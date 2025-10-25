@@ -5,8 +5,8 @@ import yfinance as yf
 import plotly.graph_objs as go
 from datetime import datetime
 
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
-CHAT_ID = os.environ.get("CHAT_ID", "")
+BOT_TOKEN = os.environ.get('BOT_TOKEN', '8457877356:AAEam56w8yHqX-ymfGArr3BXAlhmjJB2pDA')
+CHAT_ID = os.environ.get('CHAT_ID', '5877958037')
 
 st.set_page_config(page_title="📈 MA Cross Monitor", layout="wide")
 st.title("📈 이동평균선 교차 모니터링 시스템")
