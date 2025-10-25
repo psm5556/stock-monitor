@@ -22,7 +22,7 @@ TICKERS = [
     "NTRA", "NVDA", "OKLO", "ON", "ORCL", "OXY", "PCG", "PG", "PLTR",
     "PLUG", "PSTG", "PYPL", "QBTS", "QS", "QUBT", "QURE", "RGTI",
     "RKLB", "ROK", "SBGSY", "SEDG", "SHEL", "SIEGY", "SLDP", "SMR",
-    "SNPS", "SO", "SOFI", "SPCE", "SPWR", "SQ", "SRE", "STEM", "TLT",
+    "SNPS", "SO", "SOFI", "SPCE", "SPWR", "XYZ", "SRE", "STEM", "TLT",
     "TMO", "TSLA", "TSM", "TWST", "UBT", "UNH", "V", "VLO", "VRT", "VST",
     "WMT", "HON", "TXG", "XOM", "ZPTA"
 ]
@@ -42,6 +42,7 @@ def get_company_name(symbol):
 # ✅ 가격 데이터 (app.py 동일)
 def get_price(symbol, interval="1d"):
     period = "10y" if interval == "1wk" else "3y"
+    
     ticker = yf.Ticker(symbol)
     try:
         df = ticker.history(period=period, interval=interval)
