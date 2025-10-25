@@ -3,92 +3,112 @@ import pandas as pd
 import yfinance as yf
 import datetime
 import requests
+import time
 
-# -------------------
-# 📱 텔레그램 설정
-# -------------------
-TELEGRAM_TOKEN = "여기에_봇_토큰_입력"
-TELEGRAM_CHAT_ID = "여기에_chat_id_입력"
+# ===============================
+# 🔧 설정
+# ===============================
+TELEGRAM_BOT_TOKEN = "여기에_본인_텔레그램_봇_토큰_입력"
+TELEGRAM_CHAT_ID = "여기에_본인_Chat_ID_입력"
 
-def send_telegram_message(message):
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    params = {"chat_id": TELEGRAM_CHAT_ID, "text": message}
+# 모니터링할 티커 (예시)
+WATCHLIST = ["AAPL", "MSFT", "NVDA", "TSLA", "GOOG", "AMZN"]
+
+# ===============================
+# 📤 텔레그램 알림 함수
+# ===============================
+def send_telegram_alert(message: str):
     try:
-        requests.get(url, params=params)
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+        payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message}
+        requests.post(url, data=payload)
     except Exception as e:
-        st.error(f"텔레그램 전송 실패: {e}")
+        print(f"[ERROR] 텔레그램 전송 실패: {e}")
 
-# -------------------
-# 📊 데이터 다운로드 및 MA 계산
-# -------------------
-@st.cache_data(ttl=3600)
-def get_data(symbol, interval="1d", period="2y"):
-    data = yf.download(symbol, period=period, interval=interval, progress=False)
-
-    # MultiIndex일 경우 첫 번째 레벨로 변경
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = df.columns.get_level_values(0)
-
-    # Close 컬럼이 존재하지 않으면 종료
-    if "Close" not in data.columns:
-        st.warning(f"{symbol}: 'Close' 데이터 없음")
+# ===============================
+# 📈 데이터 수집 함수
+# ===============================
+def get_data(ticker, interval="1d", period="2y"):
+    try:
+        stock = yf.Ticker(ticker)
+        df = stock.history(period=period, interval=interval)
+        if df.empty or "Close" not in df.columns:
+            return pd.DataFrame()
+        for ma in [200, 240, 365]:
+            df[f"MA{ma}"] = df["Close"].rolling(ma).mean()
+        return df
+    except Exception as e:
+        print(f"[ERROR] {ticker} 데이터 수집 실패: {e}")
         return pd.DataFrame()
 
-    # 이동평균 계산
+# ===============================
+# ⚙️ 교차 체크 함수
+# ===============================
+def check_cross(df, ticker, timeframe="일"):
+    if df.empty:
+        return None
+
+    latest = df.iloc[-1]
+    close = latest["Close"]
+    alerts = []
     for ma in [200, 240, 365]:
-        data[f"MA{ma}"] = data["Close"].rolling(ma).mean()
+        ma_value = latest[f"MA{ma}"]
+        prev = df.iloc[-2][f"MA{ma}"]
+        if pd.notna(ma_value) and pd.notna(prev):
+            if (close >= ma_value and df.iloc[-2]["Close"] < prev) or \
+               (close <= ma_value and df.iloc[-2]["Close"] > prev):
+                alerts.append(f"{ticker} — {timeframe} {ma}일선 교차 감지!")
 
-    return data.dropna()
+    return alerts
 
-# -------------------
-# ⚙️ Streamlit UI
-# -------------------
-st.set_page_config(page_title="📈 이동평균선 감시 알림", layout="wide")
-st.title("📈 이동평균선 감시 대시보드 (일봉 + 주봉)")
+# ===============================
+# 🚀 메인 실행 함수
+# ===============================
+def main():
+    st.set_page_config(page_title="Stock MA Alert", layout="wide")
+    st.title("📊 이동평균선 교차 모니터링 시스템")
+    st.caption("200, 240, 365일선 + 주간 동일 조건 감시")
 
-stocks = ["AAPL", "MSFT", "NVDA", "GOOG", "AMZN", "META", "TSLA"]
-alert_triggered = []
+    alert_list = []
 
-for symbol in stocks:
-    st.subheader(f"📊 {symbol}")
+    with st.spinner("데이터 수집 중..."):
+        for ticker in WATCHLIST:
+            df_daily = get_data(ticker, "1d", "2y")
+            df_weekly = get_data(ticker, "1wk", "5y")
 
-    # 일봉 데이터
-    daily = get_data(symbol, "1d", "2y")
-    if not daily.empty:
-        st.line_chart(daily[["Close", "MA200", "MA240", "MA365"]])
+            daily_alerts = check_cross(df_daily, ticker, "일")
+            weekly_alerts = check_cross(df_weekly, ticker, "주")
 
-        last = daily.iloc[-1]
-        for ma in ["MA200", "MA240", "MA365"]:
-            if abs(last["Close"] - last[ma]) / last[ma] < 0.001:  # 0.1% 접근 시
-                msg = f"⚠️ {symbol} 일봉이 {ma}({last[ma]:.2f})와 만남!"
-                alert_triggered.append(msg)
+            if daily_alerts:
+                alert_list.extend(daily_alerts)
+            if weekly_alerts:
+                alert_list.extend(weekly_alerts)
+
+    # ===============================
+    # 🧾 결과 표시
+    # ===============================
+    if alert_list:
+        st.success("🚨 교차 발생 감지!")
+        for a in alert_list:
+            st.write(a)
+        message = "\n".join(alert_list)
+        send_telegram_alert(f"📢 MA 교차 감지 알림\n{message}")
     else:
-        st.warning(f"{symbol} 일봉 데이터 없음")
+        st.info("현재 교차 조건을 만족하는 종목이 없습니다.")
 
-    # 주봉 데이터
-    weekly = get_data(symbol, "1wk", "5y")
-    if not weekly.empty:
-        st.line_chart(weekly[["Close", "MA200", "MA240", "MA365"]])
+    st.markdown("---")
+    st.markdown("⏱️ 마지막 실행 시각: " + datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
-        last_w = weekly.iloc[-1]
-        for ma in ["MA200", "MA240", "MA365"]:
-            if abs(last_w["Close"] - last_w[ma]) / last_w[ma] < 0.001:
-                msg = f"⚠️ {symbol} 주봉이 {ma}({last_w[ma]:.2f})와 만남!"
-                alert_triggered.append(msg)
-    else:
-        st.warning(f"{symbol} 주봉 데이터 없음")
+    st.markdown("""
+    ### ⚙️ 자동실행 설정 (예시)
+    - Streamlit Cloud에서 주기 실행은 직접 지원되지 않으므로,
+      GitHub + [cron-job.org](https://cron-job.org/) 또는 GitHub Actions로 10분 간격으로 호출할 수 있습니다.
+    - 예시 URL:  
+      `https://your-app.streamlit.app/`
+    """)
 
-st.divider()
-
-# -------------------
-# 🔔 알림 전송
-# -------------------
-if alert_triggered:
-    st.error("🚨 조건 충족! 알림 전송 중...")
-    for msg in alert_triggered:
-        send_telegram_message(msg)
-        st.write(msg)
-else:
-    st.success("✅ 현재 모든 종목은 기준선과 거리 있음")
-
-st.caption("10분마다 자동 실행 시, Streamlit Cloud Scheduler 또는 외부 cron으로 반복 가능")
+# ===============================
+# 🕒 자동실행 (로컬 테스트 시)
+# ===============================
+if __name__ == "__main__":
+    main()
