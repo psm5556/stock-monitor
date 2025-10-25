@@ -60,13 +60,28 @@ def load_data(symbol, interval):
 
 
 def detect_cross(df):
+    # 최소 2개 이상의 데이터 필요
+    if len(df) < 370:  # MA365 계산 보장
+        return []
+
     result = []
+    
     for p in [200,240,365]:
         ma = f"MA{p}"
-        if df["Close"].iloc[-2] < df[ma].iloc[-2] and df["Close"].iloc[-1] >= df[ma].iloc[-1]:
+
+        if df[ma].isna().any():
+            continue
+
+        prev_close = df["Close"].iloc[-2]
+        curr_close = df["Close"].iloc[-1]
+        prev_ma = df[ma].iloc[-2]
+        curr_ma = df[ma].iloc[-1]
+
+        if prev_close < prev_ma and curr_close >= curr_ma:
             result.append((ma, "상향"))
-        if df["Close"].iloc[-2] > df[ma].iloc[-2] and df["Close"].iloc[-1] <= df[ma].iloc[-1]:
+        elif prev_close > prev_ma and curr_close <= curr_ma:
             result.append((ma, "하향"))
+
     return result
 
 
