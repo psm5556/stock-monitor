@@ -205,7 +205,7 @@ else:
         x=df_chart.index, open=df_chart["Open"], high=df_chart["High"],
         low=df_chart["Low"], close=df_chart["Close"]
     ))
-    for p,c in zip(MA_LIST,[,"#7752fe","#f97316","#6b7280"]):
+    for p,c in zip(MA_LIST,["#7752fe","#f97316","#6b7280"]):
         fig.add_trace(go.Scatter(
             x=df_chart.index, y=df_chart[f"MA{p}"],
             mode="lines", name=f"MA{p}",
