@@ -26,36 +26,30 @@ PERIODS = [200, 240, 365]
 
 
 @st.cache_data(ttl=3600)
-def get_data(ticker, interval="1d"):
-    """안정적인 Yahoo Finance 데이터 수집"""
+def get_company_name(ticker):
+    """티커로부터 기업명을 자동으로 가져옵니다."""
     try:
-        ticker_obj = yf.Ticker(ticker)
-        df = ticker_obj.history(period="10y", interval=interval, auto_adjust=True)
+        info = yf.Ticker(ticker).info
+        if "longName" in info and info["longName"]:
+            return info["longName"]
+        elif "shortName" in info and info["shortName"]:
+            return info["shortName"]
+        else:
+            return ticker
+    except Exception:
+        return ticker
 
-        # ✅ MultiIndex 컬럼 방지
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.get_level_values(0)
-
-        # ✅ 필수 컬럼 확인
-        if "Close" not in df.columns:
-            raise ValueError(f"{ticker} 데이터에 'Close' 컬럼이 없습니다.")
-
-        # ✅ 이동평균선 직접 계산
-        for p in PERIODS:
-            df[f"MA{p}"] = df["Close"].rolling(p).mean()
-
-        # ✅ 결측치 제거
-        df = df.dropna(subset=["Close"])
-
-        return df
-
-    except Exception as e:
-        st.warning(f"{ticker} 데이터 수집 실패: {e}")
-        return pd.DataFrame()
-
+@st.cache_data(ttl=3600)
+def get_data(ticker, interval="1d"):
+    ticker_obj = yf.Ticker(ticker)
+    df = ticker_obj.history(period="2y", interval=interval, auto_adjust=True)
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
+    for p in PERIODS:
+        df[f"MA{p}"] = df["Close"].rolling(p).mean()
+    return df.dropna()
 
 def detect_cross(data):
-    """이동평균 교차 감지"""
     cross = []
     if len(data) < 2:
         return cross
@@ -69,29 +63,26 @@ def detect_cross(data):
             cross.append((p, "하향"))
     return cross
 
+# ✅ 기업명 자동 불러오기
+company_names = {t: get_company_name(t) for t in TICKERS}
+display_options = [f"{company_names[t]} ({t})" for t in TICKERS]
 
 col1, col2 = st.columns([1, 3])
 with col1:
-    selected = st.selectbox("📊 종목 선택", TICKERS)
-    st.write("모니터링 대상은 app.py 내부 TICKERS 리스트에서 수정 가능")
+    selection = st.selectbox("📊 종목 선택", display_options)
+    selected = selection.split("(")[-1].replace(")", "")
+    st.write("기업명은 yfinance에서 자동 불러옵니다.")
 with col2:
     st.write("최근 주가 및 이동평균선 (일/주 단위)")
 
-# ✅ 일간 데이터
 daily = get_data(selected, "1d")
-if not daily.empty:
-    st.subheader("📅 일 단위 (Daily) 차트")
-    available_cols = [c for c in ["Close", "MA200", "MA240", "MA365"] if c in daily.columns]
-    st.line_chart(daily[available_cols])
+st.subheader("📅 일 단위 (Daily) 차트")
+st.line_chart(daily[["Close", "MA200", "MA240", "MA365"]].dropna())
 
-# ✅ 주간 데이터
 weekly = get_data(selected, "1wk")
-if not weekly.empty:
-    st.subheader("🗓️ 주 단위 (Weekly) 차트")
-    available_cols = [c for c in ["Close", "MA200", "MA240", "MA365"] if c in weekly.columns]
-    st.line_chart(weekly[available_cols])
+st.subheader("🗓️ 주 단위 (Weekly) 차트")
+st.line_chart(weekly[["Close", "MA200", "MA240", "MA365"]].dropna())
 
-# ✅ 교차 감지
 daily_cross = detect_cross(daily)
 weekly_cross = detect_cross(weekly)
 
