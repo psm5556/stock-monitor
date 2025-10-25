@@ -127,8 +127,8 @@ def build_alert_message(results):
 
     sections = [
         ("📅 Daily — 근접", "daily", "근접"),
-        ("📅 Daily — 하향이탈", "daily", "하향이탈"),
         ("🗓 Weekly — 근접", "weekly", "근접"),
+        ("📅 Daily — 하향이탈", "daily", "하향이탈"),
         ("🗓 Weekly — 하향이탈", "weekly", "하향이탈"),
     ]
 
