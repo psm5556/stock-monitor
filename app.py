@@ -13,7 +13,7 @@ BOT_TOKEN = os.environ.get('BOT_TOKEN')
 CHAT_ID = os.environ.get('CHAT_ID')
 
 MA_LIST = [200, 240, 365]
-TOLERANCE = 0.005  # ✅ 근접 임계값 ±5%
+TOLERANCE = 0.01  # ✅ 근접 임계값 ±1%
 
 st.set_page_config(page_title="📈 장기 MA 접근 모니터", layout="wide")
 st.title("📈 장기(200/240/365) 이동평균선 접근 모니터 — 일봉 & 주봉")
