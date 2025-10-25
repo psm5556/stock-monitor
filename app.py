@@ -27,7 +27,7 @@ st.caption("목적: 하락 추세에서 장기 MA(200/240/365)에 **접근/터�
 # 모니터링 대상 티커 (원하시면 자유롭게 수정)
 # =========================
 available_tickers = [
-    "AAPL", "ABB", "ABCL", "ACHR", "AEP",
+    "AAPL", "ABCL", "ACHR", "AEP",
     "AES", "ALAB", "AMD", "AMZN", "ANET", "ARQQ", "ARRY", "ASML", "ASTS", "AVGO",
     "BA", "BAC", "BE", "BEP", "BLK", "BMNR", "BP", "BTQ", "BWXT", "C", "CARR",
     "CDNS", "CEG", "CFR.SW", "CGON", "CLPT", "COIN", "CONE", "CONL", "COP", "COST",
