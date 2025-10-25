@@ -30,131 +30,82 @@ TICKERS = [
 MA_LIST = [200, 240, 365]
 
 
-def get_company_name(symbol):
+def get_company_name(s):
     try:
-        info = yf.Ticker(symbol).info
-        return info.get("longName") or info.get("shortName") or symbol
-    except:
-        return symbol
+        return yf.Ticker(s).info.get("longName") or s
+    except: return s
 
 
-# ✅ app.py 동일 (return 위치 Fix + MA 추가)
-def get_price(symbol, interval="1d"):
-    period = "10y" if interval == "1wk" else "3y"
+def get_price(symbol, interval):
     ticker = yf.Ticker(symbol)
-
-    try:
-        df = ticker.history(period=period, interval=interval)
-        if df.empty:
-            df = ticker.history(period="max", interval=interval)
-    except:
-        df = ticker.history(period="max", interval=interval)
-
-    if df is None or df.empty:
-        return None
-
-    df = df[["Open", "High", "Low", "Close", "Volume"]].copy()
+    period = "10y" if interval=="1wk" else "3y"
+    df = ticker.history(period=period, interval=interval)
+    if df is None or df.empty: return None
+    df = df[["Open","High","Low","Close","Volume"]].copy()
     for p in MA_LIST:
         df[f"MA{p}"] = df["Close"].rolling(p).mean()
-
     df.dropna(inplace=True)
     return df if not df.empty else None
 
 
-# ✅ app.py 동일
-def is_downtrend(df, lookback=20):
-    if len(df) < lookback + 1:
-        return False
-
-    close_slope = (df["Close"].iloc[-1] - df["Close"].iloc[-lookback]) / lookback
-    ma200_slope = (
-        df["MA200"].iloc[-1] - df["MA200"].iloc[-lookback]
-        if "MA200" in df.columns else 0
-    ) / lookback
-
-    return (close_slope < 0) or (ma200_slope < 0)
+def is_downtrend(df):
+    if len(df)<21: return False
+    close_slope = df["Close"].iloc[-1] - df["Close"].iloc[-21]
+    return close_slope<0
 
 
-# ✅ app.py 동일 (MA 아래 있어도 감지)
-def detect_ma_touch(df, tolerance=0.005):
-    touches = []
-    last = df.iloc[-1]
-
-    for p in MA_LIST:
-        col = f"MA{p}"
-        if col not in df.columns or pd.isna(last[col]):
-            continue
-
-        close_price = last["Close"]
-        ma_value = last[col]
-        gap = (close_price - ma_value) / ma_value
-        abs_gap = abs(gap)
-
-        # 조건 분리
-        if abs_gap <= tolerance:
-            status = "근접"   # Close ≈ MA
-        elif close_price < ma_value:
-            status = "하향이탈"  # Close < MA
-        else:
-            continue
-
-        touches.append((p, round(gap * 100, 2), status))
-
-    return touches
-
-
-def scan(symbol):
-    name = get_company_name(symbol)
-    result = {"symbol": symbol, "name": name, "daily": [], "weekly": []}
-
-    for interval, key in [("1d", "daily"), ("1wk", "weekly")]:
-        df = get_price(symbol, interval)
+def detect(symbol):
+    out = {"symbol":symbol,"name":get_company_name(symbol),
+           "Daily":{"근접":[],"하향이탈":[]},
+           "Weekly":{"근접":[],"하향이탈":[]}}
+    for itv,key in [("1d","Daily"),("1wk","Weekly")]:
+        df = get_price(symbol,itv)
         if df is not None and is_downtrend(df):
-            touches = detect_ma_touch(df)
-            if touches:
-                result[key] = touches
+            last=df.iloc[-1]
+            for p in MA_LIST:
+                ma=last[f"MA{p}"]
+                gap=(last["Close"]-ma)/ma
+                if abs(gap)<=0.005: out[key]["근접"].append((p,round(gap*100,2)))
+                elif last["Close"]<ma: out[key]["하향이탈"].append((p,round(gap*100,2)))
+    return out
 
-    return result
+
+def build_msg(results):
+    ts = datetime.now(pytz.timezone("Asia/Seoul")).strftime("%Y-%m-%d %H:%M:%S")
+    msg = f"📬 [자동] 장기 MA 감지 ({ts})\n"
+    sections=[
+        ("📅 Daily — 근접","Daily","근접"),
+        ("📅 Daily — 하향이탈","Daily","하향이탈"),
+        ("🗓 Weekly — 근접","Weekly","근접"),
+        ("🗓 Weekly — 하향이탈","Weekly","하향이탈"),
+    ]
+    any_sig=False
+    for title,k1,k2 in sections:
+        block=""
+        for r in results:
+            rows=r[k1][k2]
+            if rows:
+                any_sig=True
+                block+=f"- {r['name']} ({r['symbol']})\n"
+                for p,gap in rows:
+                    emoji="✅" if k2=="근접" else "🔻"
+                    block+=f"   {emoji} MA{p} {k2} ({gap:+.2f}%)\n"
+        if block: msg+=f"\n{title}\n{block}"
+    if not any_sig: msg+="\n감지된 종목 없음"
+    return msg
 
 
-def send_telegram(msg):
+def send(msg):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    requests.post(url, json={"chat_id": CHAT_ID, "text": msg})
+    requests.post(url, json={"chat_id":CHAT_ID,"text":msg})
 
 
-KST = pytz.timezone("Asia/Seoul")
-timestamp = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
-header = f"📬 [자동] 장기 MA 접근 감지 ({timestamp})\n"
+results=[]
+for s in TICKERS:
+    r = detect(s)
+    if any([r["Daily"]["근접"],r["Daily"]["하향이탈"],r["Weekly"]["근접"],r["Weekly"]["하향이탈"]]):
+        results.append(r)
 
-daily_msg = "\n📅 Daily\n"
-weekly_msg = "\n🗓 Weekly\n"
-has_daily = has_weekly = False
-
-for sym in TICKERS:
-    r = scan(sym)
-
-    if r["daily"]:
-        has_daily = True
-        daily_msg += f"- {r['name']} ({sym})\n"
-        for p, gap, status in r["daily"]:
-            emoji = "✅" if status == "근접" else "🔻"
-            daily_msg += f"   {emoji} MA{p} {status} ({gap:+.2f}%)\n"
-    
-    if r["weekly"]:
-        has_weekly = True
-        weekly_msg += f"- {r['name']} ({sym})\n"
-        for p, gap, status in r["weekly"]:
-            emoji = "✅" if status == "근접" else "🔻"
-            weekly_msg += f"   {emoji} MA{p} {status} ({gap:+.2f}%)\n"
-
-
-
-msg = header
-if has_daily: msg += daily_msg
-if has_weekly: msg += weekly_msg
-if not (has_daily or has_weekly):
-    msg += "감지된 종목 없음\n"
-
-
-send_telegram(msg)
-print("✅ Scan Done & Telegram Sent")
+msg = build_msg(results)
+send(msg)
+print("✅ 자동 스캔 완료 & Telegram 전송!")
