@@ -46,20 +46,18 @@ def get_company_name(symbol):
 @st.cache_data(ttl=3600)
 def get_price(symbol, interval="1d"):
     period = "10y" if interval == "1wk" else "3y"
-    # df = yf.Ticker(symbol).history(period=period, interval=interval)
     ticker = yf.Ticker(symbol)
     try:
         df = ticker.history(period=period, interval=interval)
         if df.empty:
-            # fallback: 전체 데이터
             df = ticker.history(period="max", interval=interval)
-    except Exception:
+    except:
         df = ticker.history(period="max", interval=interval)
-    df = df.dropna()
-    return df
+
     if df is None or df.empty:
         return None
-    df = df[["Open","High","Low","Close","Volume"]].copy()
+
+    df = df[["Open", "High", "Low", "Close", "Volume"]].copy()
     for p in MA_LIST:
         df[f"MA{p}"] = df["Close"].rolling(p).mean()
     df.dropna(inplace=True)
