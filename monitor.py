@@ -30,7 +30,6 @@ TICKERS = [
 MA_LIST = [200, 240, 365]
 
 
-# ✅ 회사명
 def get_company_name(symbol):
     try:
         info = yf.Ticker(symbol).info
@@ -39,10 +38,11 @@ def get_company_name(symbol):
         return symbol
 
 
-# ✅ 가격 데이터 (app.py 동일)
+# ✅ app.py 동일 (return 위치 Fix + MA 추가)
 def get_price(symbol, interval="1d"):
     period = "10y" if interval == "1wk" else "3y"
     ticker = yf.Ticker(symbol)
+
     try:
         df = ticker.history(period=period, interval=interval)
         if df.empty:
@@ -54,8 +54,6 @@ def get_price(symbol, interval="1d"):
         return None
 
     df = df[["Open", "High", "Low", "Close", "Volume"]].copy()
-
-    # ✅ 장기 이동평균 추가
     for p in MA_LIST:
         df[f"MA{p}"] = df["Close"].rolling(p).mean()
 
@@ -63,23 +61,25 @@ def get_price(symbol, interval="1d"):
     return df if not df.empty else None
 
 
-# ✅ 하락 추세
+# ✅ app.py 동일
 def is_downtrend(df, lookback=20):
     if len(df) < lookback + 1:
         return False
-    slope = (df.Close.iloc[-1] - df.Close.iloc[-lookback]) / lookback
-    return slope < 0
+
+    close_slope = (df["Close"].iloc[-1] - df["Close"].iloc[-lookback]) / lookback
+    ma200_slope = (
+        df["MA200"].iloc[-1] - df["MA200"].iloc[-lookback]
+        if "MA200" in df.columns else 0
+    ) / lookback
+
+    return (close_slope < 0) or (ma200_slope < 0)
 
 
-# ✅ 괴리율 계산
-def calc_gap(last_close, ma_value):
-    return round((last_close - ma_value) / ma_value * 100, 2)
-
-
-# ✅ MA Touch 감지
+# ✅ app.py 동일 (MA 아래 있어도 감지)
 def detect_ma_touch(df, tolerance=0.005):
     touches = []
     last = df.iloc[-1]
+
     for p in MA_LIST:
         col = f"MA{p}"
         if col not in df.columns or pd.isna(last[col]):
@@ -88,92 +88,64 @@ def detect_ma_touch(df, tolerance=0.005):
         close_price = last["Close"]
         ma_value = last[col]
         gap = abs(close_price - ma_value) / ma_value
-
-        # ✅ 조건 1: MA 근접(0.5% 이내)
         is_near = gap <= tolerance
-
-        # ✅ 조건 2: 현재가가 MA 아래에 위치 (더 싸게 매수 기회)
         is_below = close_price < ma_value
 
         if is_near or is_below:
-            touches.append(p)
+            touches.append((p, round(gap*100, 2))) # ✅ gap % 포함 반환
 
     return touches
 
 
-
-# ✅ 감지 수행
 def scan(symbol):
     name = get_company_name(symbol)
-    dfd = get_price(symbol, "1d")
-    dfw = get_price(symbol, "1wk")
+    result = {"symbol": symbol, "name": name, "daily": [], "weekly": []}
 
-    return {
-        "symbol": symbol,
-        "name": name,
-        "daily": detect_ma_touch(dfd) if dfd is not None and is_downtrend(dfd) else [],
-        "weekly": detect_ma_touch(dfw) if dfw is not None and is_downtrend(dfw) else [],
-    }
+    for interval, key in [("1d", "daily"), ("1wk", "weekly")]:
+        df = get_price(symbol, interval)
+        if df is not None and is_downtrend(df):
+            touches = detect_ma_touch(df)
+            if touches:
+                result[key] = touches
+
+    return result
 
 
-# ✅ Telegram 전송
 def send_telegram(msg):
-    try:
-        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-        requests.post(url, json={"chat_id": CHAT_ID, "text": msg})
-    except Exception as e:
-        print("Telegram Error:", e)
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+    requests.post(url, json={"chat_id": CHAT_ID, "text": msg})
 
 
-# ✅ 메시지 구성 (app.py 개선 기반)
 KST = pytz.timezone("Asia/Seoul")
 timestamp = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
 header = f"📬 [자동] 장기 MA 접근 감지 ({timestamp})\n"
 
 daily_msg = "\n📅 Daily\n"
 weekly_msg = "\n🗓 Weekly\n"
-
 has_daily = has_weekly = False
 
 for sym in TICKERS:
     r = scan(sym)
-    if not r["daily"] and not r["weekly"]:
-        continue
 
-    # price refresh
-    dfd = get_price(sym, "1d")
-    dfw = get_price(sym, "1wk")
-
-    last_d = dfd.iloc[-1] if dfd is not None else None
-    last_w = dfw.iloc[-1] if dfw is not None else None
-
-    # ✅ Daily 메시지
     if r["daily"]:
         has_daily = True
-        parts = []
-        for p in r["daily"]:
-            gap = calc_gap(last_d.Close, last_d[f"MA{p}"])
-            arrow = "▼" if gap < 0 else "▲"
-            parts.append(f"{arrow}{gap}% (MA{p})")
-        daily_msg += f"- {r['name']} ({sym})  " + ", ".join(parts) + "\n"
+        line = f"- {r['name']} ({sym}): "
+        line += ", ".join([f"MA{p}({gap}%)" for p, gap in r["daily"]]) + "\n"
+        daily_msg += line
 
-    # ✅ Weekly 메시지
     if r["weekly"]:
         has_weekly = True
-        parts = []
-        for p in r["weekly"]:
-            gap = calc_gap(last_w.Close, last_w[f"MA{p}"])
-            arrow = "▼" if gap < 0 else "▲"
-            parts.append(f"{arrow}{gap}% (MA{p})")
-        weekly_msg += f"- {r['name']} ({sym})  " + ", ".join(parts) + "\n"
+        line = f"- {r['name']} ({sym}): "
+        line += ", ".join([f"MA{p}({gap}%)" for p, gap in r["weekly"]]) + "\n"
+        weekly_msg += line
 
-# ✅ 최종 메시지 구성
+
 msg = header
 if has_daily: msg += daily_msg
 if has_weekly: msg += weekly_msg
 if not (has_daily or has_weekly):
-    msg += "감지된 종목 없음"
+    msg += "감지된 종목 없음\n"
 
-# ✅ Telegram 발송
+
 send_telegram(msg)
 print("✅ Scan Done & Telegram Sent")
