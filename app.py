@@ -65,27 +65,27 @@ def get_price(symbol, interval="1d"):
     return df if not df.empty else None
 
 
-# def is_downtrend(df, lookback=20):
-#     if len(df) < lookback + 1:
-#         return False
-#     return (df["Close"].iloc[-1] - df["Close"].iloc[-lookback]) < 0
-
 def is_downtrend(df, lookback=20):
-    ma_col = f"MA{lookback}"
-
-    # MA20이 없거나 데이터 부족하면 False
-    if ma_col not in df.columns or len(df) < lookback * 2:
+    if len(df) < lookback + 1:
         return False
+    return (df["Close"].iloc[-1] - df["Close"].iloc[-lookback]) < 0
 
-    # 현재 MA20과 과거 MA20
-    current_ma = df[ma_col].iloc[-1]
-    past_ma = df[ma_col].iloc[-lookback]
+# def is_downtrend(df, lookback=20):
+#     ma_col = f"MA{lookback}"
 
-    # 기울기: 최근 10일간(lookback//2) 변화량 활용
-    slope = current_ma - df[ma_col].iloc[-(lookback // 2)]
+#     # MA20이 없거나 데이터 부족하면 False
+#     if ma_col not in df.columns or len(df) < lookback * 2:
+#         return False
 
-    # ✅ 하락 추세 조건: 현재 < 과거 AND 기울기 음수
-    return (current_ma < past_ma) and (slope < 0)
+#     # 현재 MA20과 과거 MA20
+#     current_ma = df[ma_col].iloc[-1]
+#     past_ma = df[ma_col].iloc[-lookback]
+
+#     # 기울기: 최근 10일간(lookback//2) 변화량 활용
+#     slope = current_ma - df[ma_col].iloc[-(lookback // 2)]
+
+#     # ✅ 하락 추세 조건: 현재 < 과거 AND 기울기 음수
+#     return (current_ma < past_ma) and (slope < 0)
 
 
 # ✅ 근접/하향이탈 중복 감지 허용
