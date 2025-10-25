@@ -2,7 +2,7 @@ name: Stock Monitor (10-min)
 
 on:
   schedule:
-    - cron: "*/5 * * * *"  # 5분마다 실행 (UTC 기준)
+    - cron: "*/5 * * * 1-5"  # 5분마다 실행 (UTC 기준)
   workflow_dispatch:
 
 jobs:
