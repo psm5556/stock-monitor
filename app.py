@@ -108,7 +108,7 @@ def detect_ma_touch(df):
         if close < ma:
             touches.append((p, round(gap*100,2), "하향이탈"))
 
-#     return touches
+    return touches
 
 # def detect_ma_touch(df):
 #     touches = []
