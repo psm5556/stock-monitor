@@ -176,7 +176,7 @@ def detect_signals_for_symbol(symbol: str) -> dict:
 def build_alert_message(results: list[dict]) -> str:
     KST = pytz.timezone("Asia/Seoul")
     ts = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
-    header = f"📬 장기 MA 접근 감지 결과 ({ts})\n"
+    header = f"📬 [수동] 장기 MA 접근 감지 결과 ({ts})\n"
 
     daily_msg = ""
     weekly_msg = ""
