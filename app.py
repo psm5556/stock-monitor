@@ -3,7 +3,6 @@ import pandas as pd
 import yfinance as yf
 import datetime
 import requests
-import time
 
 # -------------------
 # 📱 텔레그램 설정
@@ -20,27 +19,26 @@ def send_telegram_message(message):
         st.error(f"텔레그램 전송 실패: {e}")
 
 # -------------------
-# 📊 데이터 불러오기 (캐시)
+# 📊 데이터 다운로드 및 MA 계산
 # -------------------
 @st.cache_data(ttl=3600)
-def get_data(symbol):
-    data = yf.download(symbol, period="2y")
-    if data.empty:
-        return pd.DataFrame()
-    data["MA200"] = data["Close"].rolling(200).mean()
-    data["MA240"] = data["Close"].rolling(240).mean()
-    data["MA365"] = data["Close"].rolling(365).mean()
-    return data
+def get_data(symbol, interval="1d", period="2y"):
+    data = yf.download(symbol, period=period, interval=interval, progress=False)
 
-@st.cache_data(ttl=3600)
-def get_weekly_data(symbol):
-    data = yf.download(symbol, period="5y", interval="1wk")
-    if data.empty:
+    # MultiIndex일 경우 첫 번째 레벨로 변경
+    if isinstance(data.columns, pd.MultiIndex):
+        data.columns = [col[0] for col in data.columns]
+
+    # Close 컬럼이 존재하지 않으면 종료
+    if "Close" not in data.columns:
+        st.warning(f"{symbol}: 'Close' 데이터 없음")
         return pd.DataFrame()
-    data["MA200"] = data["Close"].rolling(200).mean()
-    data["MA240"] = data["Close"].rolling(240).mean()
-    data["MA365"] = data["Close"].rolling(365).mean()
-    return data
+
+    # 이동평균 계산
+    for ma in [200, 240, 365]:
+        data[f"MA{ma}"] = data["Close"].rolling(ma).mean()
+
+    return data.dropna()
 
 # -------------------
 # ⚙️ Streamlit UI
@@ -48,28 +46,30 @@ def get_weekly_data(symbol):
 st.set_page_config(page_title="📈 이동평균선 감시 알림", layout="wide")
 st.title("📈 이동평균선 감시 대시보드 (일봉 + 주봉)")
 
-stocks = ["AAPL", "MSFT", "NVDA", "GOOG", "AMZN", "META", "TSLA"]  # 미리 등록된 기업 리스트
+stocks = ["AAPL", "MSFT", "NVDA", "GOOG", "AMZN", "META", "TSLA"]
 alert_triggered = []
 
 for symbol in stocks:
     st.subheader(f"📊 {symbol}")
 
     # 일봉 데이터
-    daily = get_data(symbol)
+    daily = get_data(symbol, "1d", "2y")
     if not daily.empty:
-        st.line_chart(daily[["Close", "MA200", "MA240", "MA365"]].dropna())
+        st.line_chart(daily[["Close", "MA200", "MA240", "MA365"]])
+
         last = daily.iloc[-1]
         for ma in ["MA200", "MA240", "MA365"]:
-            if abs(last["Close"] - last[ma]) / last[ma] < 0.001:  # 0.1% 이내 접근 시
+            if abs(last["Close"] - last[ma]) / last[ma] < 0.001:  # 0.1% 접근 시
                 msg = f"⚠️ {symbol} 일봉이 {ma}({last[ma]:.2f})와 만남!"
                 alert_triggered.append(msg)
     else:
         st.warning(f"{symbol} 일봉 데이터 없음")
 
     # 주봉 데이터
-    weekly = get_weekly_data(symbol)
+    weekly = get_data(symbol, "1wk", "5y")
     if not weekly.empty:
-        st.line_chart(weekly[["Close", "MA200", "MA240", "MA365"]].dropna())
+        st.line_chart(weekly[["Close", "MA200", "MA240", "MA365"]])
+
         last_w = weekly.iloc[-1]
         for ma in ["MA200", "MA240", "MA365"]:
             if abs(last_w["Close"] - last_w[ma]) / last_w[ma] < 0.001:
