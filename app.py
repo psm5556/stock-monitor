@@ -11,10 +11,10 @@ from datetime import datetime
 # =========================
 # 환경 변수 (제공값 기본 세팅)
 # =========================
-BOT_TOKEN = os.environ.get('BOT_TOKEN', '8457877356:AAEam56w8yHqX-ymfGArr3BXAlhmjJB2pDA')
-CHAT_ID = os.environ.get('CHAT_ID', '5877958037')
-# BOT_TOKEN = os.environ.get('BOT_TOKEN')
-# CHAT_ID = os.environ.get('CHAT_ID')
+# BOT_TOKEN = os.environ.get('BOT_TOKEN', '8457877356:AAEam56w8yHqX-ymfGArr3BXAlhmjJB2pDA')
+# CHAT_ID = os.environ.get('CHAT_ID', '5877958037')
+BOT_TOKEN = os.environ.get('BOT_TOKEN')
+CHAT_ID = os.environ.get('CHAT_ID')
 
 # =========================
 # UI 기본 설정
