@@ -70,23 +70,6 @@ def is_downtrend(df, lookback=20):
         return False
     return (df["Close"].iloc[-1] - df["Close"].iloc[-lookback]) < 0
 
-# def is_downtrend(df, lookback=20):
-#     ma_col = f"MA{lookback}"
-
-#     # MA20이 없거나 데이터 부족하면 False
-#     if ma_col not in df.columns or len(df) < lookback * 2:
-#         return False
-
-#     # 현재 MA20과 과거 MA20
-#     current_ma = df[ma_col].iloc[-1]
-#     past_ma = df[ma_col].iloc[-lookback]
-
-#     # 기울기: 최근 10일간(lookback//2) 변화량 활용
-#     slope = current_ma - df[ma_col].iloc[-(lookback // 2)]
-
-#     # ✅ 하락 추세 조건: 현재 < 과거 AND 기울기 음수
-#     return (current_ma < past_ma) and (slope < 0)
-
 
 # ✅ 근접/하향이탈 중복 감지 허용
 def detect_ma_touch(df):
@@ -110,28 +93,6 @@ def detect_ma_touch(df):
 
     return touches
 
-# def detect_ma_touch(df):
-#     touches = []
-#     last = df.iloc[-1]
-
-#     close = last["Close"]
-
-#     for p in MA_LIST:
-#         ma_col = f"MA{p}"
-#         if ma_col not in last or pd.isna(last[ma_col]):
-#             continue
-
-#         ma = last[ma_col]
-#         gap = (close - ma) / ma
-
-#         if abs(gap) <= TOLERANCE:
-#             touches.append((p, round(gap*100,2), "근접"))
-
-#         if close < ma:
-#             touches.append((p, round(gap*100,2), "하향이탈"))
-
-#     return touches
-
 
 def detect_symbol(symbol):
     name = get_company_name(symbol)
@@ -139,33 +100,11 @@ def detect_symbol(symbol):
 
     for itv, key in [("1d","daily"),("1wk","weekly")]:
         df = get_price(symbol,itv)
-        res = detect_ma_touch(df)
-
-        if res:
-            result[key] = res
-        # if df is not None and is_downtrend(df):
-        #     res = detect_ma_touch(df)
-        #     if res: result[key] = res
+        
+        if df is not None and is_downtrend(df):
+            res = detect_ma_touch(df)
+            if res: result[key] = res
     return result
-
-# def detect_symbol(symbol):
-#     name = get_company_name(symbol)
-#     result = {"symbol":symbol,"name":name,"daily":[],"weekly":[]}
-
-#     for itv, key in [("1d","daily"),("1wk","weekly")]:
-
-#         df = get_price(symbol,itv)
-#         if df is None or len(df) < max(MA_LIST) + 1:
-#             continue
-
-#         # ❌ 기존: is_downtrend(df) 필터 → 누락 발생
-#         # ✅ 모든 경우 감지
-#         res = detect_ma_touch(df)
-
-#         if res:
-#             result[key] = res
-
-#     return result
 
 
 # ✅ 메시지 4섹션 분리
