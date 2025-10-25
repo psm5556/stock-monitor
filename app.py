@@ -224,14 +224,14 @@ def build_alert_message(results: list[dict]) -> str:
         # Daily
         if r["daily"]:
             has_daily = True
-            daily_msg += f"- {r['name']} ({sym})\n"
+            daily_msg += f"- {r['name']} ({r['symbol']})\n"
             for p, gap, status in r["daily"]:
                 emoji = "✅" if status == "근접" else "🔻"
                 daily_msg += f"   {emoji} MA{p} {status} ({gap:+.2f}%)\n"
         
         if r["weekly"]:
             has_weekly = True
-            weekly_msg += f"- {r['name']} ({sym})\n"
+            weekly_msg += f"- {r['name']} ({r['symbol']})\n"
             for p, gap, status in r["weekly"]:
                 emoji = "✅" if status == "근접" else "🔻"
                 weekly_msg += f"   {emoji} MA{p} {status} ({gap:+.2f}%)\n"
