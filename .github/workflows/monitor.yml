@@ -2,7 +2,7 @@ name: Stock Monitor
 
 on:
   schedule:
-    - cron: "0 */2 * * *"  # 매 2시간마다 실행 (UTC 기준)
+    - cron: "*/5 * * * *"  # 매 10분마다 실행 (UTC 기준)
   workflow_dispatch:
 
 jobs:
