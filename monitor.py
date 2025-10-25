@@ -3,8 +3,8 @@ import requests
 import os
 
 # 환경변수에서 토큰/챗아이디를 읽어옵니다.
-BOT_TOKEN = os.environ.get('BOT_TOKEN', 'CHANGE_ME_BOT_TOKEN')
-CHAT_ID = os.environ.get('CHAT_ID', 'CHANGE_ME_CHAT_ID')
+BOT_TOKEN = os.environ.get('BOT_TOKEN', '8457877356:AAEam56w8yHqX-ymfGArr3BXAlhmjJB2pDA')
+CHAT_ID = os.environ.get('CHAT_ID', 'ysm_stock_alert_bot')
 
 # 모니터링 대상과 기간(일/주 단위 이동평균 기간)
 TICKERS = ["AAPL", "MSFT", "NVDA", "TSLA", "GOOG"]
