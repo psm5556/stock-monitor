@@ -10,22 +10,28 @@ st.title("📈 이동평균선 교차 모니터링 대시보드 (Daily & Weekly)
 TICKERS = ["AAPL", "MSFT", "NVDA", "TSLA", "GOOG"]
 PERIODS = [200, 240, 365]
 
-# 안정적 history() 사용 + 방어적 처리
 @st.cache_data(ttl=3600)
 def get_data(ticker, interval="1d"):
-    # interval: '1d' 또는 '1wk'
-    period = "2y" if interval == "1d" else "5y"
     try:
-        stock = yf.Ticker(ticker)
-        df = stock.history(period=period, interval=interval)
-        # 기본 컬럼 확인
-        if df is None or df.empty or "Close" not in df.columns:
+        ticker_obj = yf.Ticker(ticker)
+        data = ticker_obj.history(period="2y", interval=interval)
+        
+        # ✅ MultiIndex 방어
+        if isinstance(data.columns, pd.MultiIndex):
+            data.columns = data.columns.get_level_values(0)
+        
+        # ✅ NaN 및 컬럼 확인
+        if data.empty or "Close" not in data.columns:
+            st.warning(f"{ticker} 데이터 없음")
             return pd.DataFrame()
-        # 이동평균 계산
-        for p in PERIODS:
-            df[f"MA{p}"] = df["Close"].rolling(p).mean()
-        return df
+
+        # ✅ 이동평균선 직접 계산
+        for p in [200, 240, 365]:
+            data[f"MA{p}"] = data["Close"].rolling(p).mean()
+        
+        return data.dropna()
     except Exception as e:
+        st.error(f"{ticker} 데이터 수집 실패: {e}")
         return pd.DataFrame()
 
 col1, col2 = st.columns([1, 3])
