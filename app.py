@@ -72,10 +72,10 @@ def detect_ma_touch(df):
         if pd.isna(ma): continue
 
         close = last["Close"]
-        gap = (close - ma) / ma
+        gap = (close - ma) / ma * 100
 
         # 근접 조건
-        if abs(gap) <= TOLERANCE:
+        if abs(gap) * 100 <= TOLERANCE:
             touches.append((p, round(gap*100,2), "근접"))
 
         # 하향이탈 조건 (근접과 중복 허용)
