@@ -29,62 +29,57 @@ tickers = [
 ] 
 
 @st.cache_data
-def get_company_names(tickers):
-    data = []
+def get_company_info():
+    data=[]
     for t in tickers:
         info = yf.Ticker(t).info
         name = info.get("longName", info.get("shortName", t))
-        data.append((t, name))
-    df = pd.DataFrame(data, columns=["Symbol","Name"])
-    return df.sort_values("Name")
+        data.append((t,name))
+    df = pd.DataFrame(data,columns=["Symbol","Name"])
+    return df.sort_values("Name") # ✅ 기업명 정렬
 
-company_df = get_company_names(tickers)
+company_df = get_company_info()
 
-st.sidebar.subheader("🔍 종목 선택")
-options = {f"{row['Name']} ({row['Symbol']})": row['Symbol'] for _, row in company_df.iterrows()}
-selected_key = st.sidebar.selectbox("Select Company", list(options.keys()))
+# ✅ 종목 선택 UI
+st.sidebar.subheader("🎯 차트 종목 선택")
+options = {f"{row['Name']} ({row['Symbol']})": row['Symbol'] for _,row in company_df.iterrows()}
+selected_key = st.sidebar.selectbox("회사 선택", list(options.keys()))
 selected_symbol = options[selected_key]
 
-interval = st.sidebar.radio("차트 주기", ["일봉 (1d)", "주봉 (1wk)"])
-interval_map = {"일봉 (1d)": "1d", "주봉 (1wk)": "1wk"}
-selected_interval = interval_map[interval]
+interval = st.sidebar.radio("차트 주기", ["일봉 (1d)","주봉 (1wk)"])
+interval_map = {"일봉 (1d)":"1d","주봉 (1wk)":"1wk"}
+chart_interval = interval_map[interval]
 
-
+# ✅ 데이터 로딩
 def load_data(symbol, interval):
     period = "3y" if interval == "1d" else "10y"
     df = yf.Ticker(symbol).history(period=period, interval=interval)
     if df.empty: return df
-    for p in [200,240,365]:
-        df[f"MA{p}"] = df["Close"].rolling(p).mean()
+    df["MA200"] = df.Close.rolling(200).mean()
+    df["MA240"] = df.Close.rolling(240).mean()
+    df["MA365"] = df.Close.rolling(365).mean()
     return df.dropna()
 
 
+# ✅ 교차 감지
 def detect_cross(df):
-    # 최소 2개 이상의 데이터 필요
-    if len(df) < 370:  # MA365 계산 보장
+    if len(df) < 370: # MA365 최소 보장
         return []
 
-    result = []
-    
-    for p in [200,240,365]:
-        ma = f"MA{p}"
-
-        if df[ma].isna().any():
-            continue
-
-        prev_close = df["Close"].iloc[-2]
-        curr_close = df["Close"].iloc[-1]
-        prev_ma = df[ma].iloc[-2]
-        curr_ma = df[ma].iloc[-1]
+    result=[]
+    for ma in ["MA200","MA240","MA365"]:
+        prev_close, curr_close = df.Close.iloc[-2], df.Close.iloc[-1]
+        prev_ma, curr_ma = df[ma].iloc[-2], df[ma].iloc[-1]
 
         if prev_close < prev_ma and curr_close >= curr_ma:
-            result.append((ma, "상향"))
+            result.append(f"{ma} 상향")
         elif prev_close > prev_ma and curr_close <= curr_ma:
-            result.append((ma, "하향"))
+            result.append(f"{ma} 하향")
 
     return result
 
 
+# ✅ Telegram 발송
 def send_telegram(msg):
     if not BOT_TOKEN or not CHAT_ID: return
     import requests
@@ -92,55 +87,80 @@ def send_telegram(msg):
     requests.post(url, json={"chat_id": CHAT_ID, "text": msg})
 
 
-cross_alerts = []
-for _, row in company_df.iterrows():
-    sym = row["Symbol"]
-    df = load_data(sym, selected_interval)
-    if df.empty: continue
-    crosses = detect_cross(df)
-    if crosses:
-        formatted = "\n".join([f"{ma} {d}" for ma, d in crosses])
-        cross_alerts.append(f"{row['Name']} ({sym})\n{formatted}")
+# ✅ 전체 교차 감지 처리 (일봉+주봉 모두)
+def process_cross_detection():
+    alerts_daily=[]
+    alerts_weekly=[]
 
-if cross_alerts:
-    st.error("🚨 교차 발견 종목 존재")
-    for alert in cross_alerts:
-        st.warning(alert)
+    for _, row in company_df.iterrows():
+        sym, name = row["Symbol"], row["Name"]
 
-    telegram_message = "🚨 이동평균선 교차 감지 종목 리스트\n\n" + "\n\n".join(cross_alerts)
-    send_telegram(telegram_message)
+        # 일봉
+        df_d = load_data(sym,"1d")
+        if not df_d.empty:
+            crosses = detect_cross(df_d)
+            if crosses:
+                alerts_daily.append(f"📅{name} ({sym}):\n" + "\n".join(crosses))
 
-else:
-    st.success("✅ 전체 종목에 최근 이동평균선 교차 없음")
+        # 주봉
+        df_w = load_data(sym,"1wk")
+        if not df_w.empty:
+            crosses = detect_cross(df_w)
+            if crosses:
+                alerts_weekly.append(f"🗓️{name} ({sym}):\n" + "\n".join(crosses))
+
+    # ✅ Streamlit 표시 & Telegram 1회 발송 메시지 구성
+    if alerts_daily or alerts_weekly:
+        st.error("🚨 이동평균선 교차 감지!")
+
+        if alerts_daily:
+            st.subheader("📅 일봉 교차 종목")
+            for x in alerts_daily: st.warning(x)
+
+        if alerts_weekly:
+            st.subheader("🗓️ 주봉 교차 종목")
+            for x in alerts_weekly: st.warning(x)
+
+        telegram_message = "🚨 이동평균선 교차 감지\n\n"
+        if alerts_daily:
+            telegram_message += "📅 일봉\n" + "\n\n".join(alerts_daily) + "\n\n"
+        if alerts_weekly:
+            telegram_message += "🗓️ 주봉\n" + "\n\n".join(alerts_weekly)
+
+        send_telegram(telegram_message)
+
+    else:
+        st.success("✅ 전체 종목에 교차 없음")
 
 
-df = load_data(selected_symbol, selected_interval)
-if df.empty:
-    st.error("⚠ 데이터 조회 실패")
+# ✅ 교차 감지 실행 (차트와 독립)
+process_cross_detection()
+
+
+# ✅ 선택한 종목 차트 표시
+df_chart = load_data(selected_symbol, chart_interval)
+if df_chart.empty:
+    st.error("⚠ 데이터 부족")
 else:
     fig = go.Figure()
-
     fig.add_trace(go.Candlestick(
-        x=df.index, open=df.Open, high=df.High, low=df.Low, close=df.Close,
+        x=df_chart.index, open=df_chart.Open, high=df_chart.High,
+        low=df_chart.Low, close=df_chart.Close,
         name="Price"
     ))
 
-    for ma,color in zip(["MA200","MA240","MA365"],["blue","orange","green"]):
+    for ma,color in zip(["MA200","MA240","MA365"],
+                        ["blue","orange","green"]):
         fig.add_trace(go.Scatter(
-            x=df.index, y=df[ma], mode="lines",
-            name=ma, line=dict(color=color,width=1.8)
+            x=df_chart.index, y=df_chart[ma],
+            mode="lines", name=ma,
+            line=dict(color=color,width=1.7)
         ))
 
-    fig.update_yaxes(
-        autorange=True,
-        range=[df.Low.min()*0.97, df.High.max()*1.03]
-    )
-
-    fig.update_layout(
-        title=f"{selected_key} — {selected_interval}",
-        height=650, xaxis_rangeslider_visible=False,
-        showlegend=True
-    )
+    fig.update_yaxes(range=[df_chart.Low.min()*0.97, df_chart.High.max()*1.03])
+    fig.update_layout(title=f"{selected_key} — {chart_interval}",
+                      height=650,showlegend=True,
+                      xaxis_rangeslider_visible=False)
     st.plotly_chart(fig, use_container_width=True)
 
 st.caption(f"⏱ 업데이트: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
