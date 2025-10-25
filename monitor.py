@@ -6,56 +6,75 @@ import os
 BOT_TOKEN = os.environ.get('BOT_TOKEN', '8457877356:AAEam56w8yHqX-ymfGArr3BXAlhmjJB2pDA')
 CHAT_ID = os.environ.get('CHAT_ID', '5877958037')
 
-# 모니터링 대상과 기간(일/주 단위 이동평균 기간)
 TICKERS = ["AAPL", "MSFT", "NVDA", "TSLA", "GOOG"]
 PERIODS = [200, 240, 365]
 
-def send_telegram(msg):
-    if BOT_TOKEN.startswith('CHANGE_ME') or CHAT_ID.startswith('CHANGE_ME'):
-        print("[WARN] BOT_TOKEN or CHAT_ID not configured - skipping send")
+def send_telegram(text):
+    if not BOT_TOKEN or not CHAT_ID:
+        print("⚠️ BOT_TOKEN/CHAT_ID 누락. 메시지를 전송하지 않습니다.")
         return
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    requests.post(url, data={"chat_id": CHAT_ID, "text": msg})
+    try:
+        requests.post(url, data={"chat_id": CHAT_ID, "text": text}, timeout=15)
+    except Exception as e:
+        print(f"❌ Telegram 전송 실패: {e}")
 
-def check_cross(ticker, interval):
-    # interval: '1d' 또는 '1wk'
-    data = yf.download(ticker, period="2y", interval=interval, progress=False)
-    close = data['Close']
+def get_data(ticker, interval="1d"):
+    period = "2y" if interval == "1d" else "5y"
+    try:
+        t = yf.Ticker(ticker)
+        df = t.history(period=period, interval=interval)
+        if df is None or df.empty or "Close" not in df.columns:
+            return pd.DataFrame()
+        for p in PERIODS:
+            df[f"MA{p}"] = df["Close"].rolling(p).mean()
+        return df
+    except Exception as e:
+        print(f"[WARN] {ticker} 데이터 오류: {e}")
+        return pd.DataFrame()
+
+def detect_cross(df):
     res = []
-    if len(close) < 2:
+    if df is None or df.empty or len(df) < 2:
         return res
+    prev = df.iloc[-2]
+    last = df.iloc[-1]
     for p in PERIODS:
-        ma = close.rolling(p).mean()
-        if ma.isna().all():
+        col = f"MA{p}"
+        if col not in df.columns:
             continue
-        # 직전과 현재의 관계를 비교해 교차(상향/하향)를 감지
-        prev_close = close.iloc[-2]
-        last_close = close.iloc[-1]
-        prev_ma = ma.iloc[-2]
-        last_ma = ma.iloc[-1]
-        if prev_close < prev_ma and last_close >= last_ma:
-            res.append((p, '상향'))
-        elif prev_close > prev_ma and last_close <= last_ma:
-            res.append((p, '하향'))
+        prev_ma = df[col].iloc[-2]
+        last_ma = df[col].iloc[-1]
+        if pd.isna(prev_ma) or pd.isna(last_ma):
+            continue
+        if prev["Close"] < prev_ma and last["Close"] >= last_ma:
+            res.append((p, "상향"))
+        elif prev["Close"] > prev_ma and last["Close"] <= last_ma:
+            res.append((p, "하향"))
     return res
 
 def main():
     alerts = []
-    for t in TICKERS:
-        daily_cross = check_cross(t, '1d')
-        weekly_cross = check_cross(t, '1wk')
-        if daily_cross or weekly_cross:
-            parts = []
-            if daily_cross:
-                parts.append('일단위: ' + ', '.join([f"{p}일선({d})" for p,d in daily_cross]))
-            if weekly_cross:
-                parts.append('주단위: ' + ', '.join([f"{p}주선({d})" for p,d in weekly_cross]))
-            alerts.append(f"{t} -> " + ' / '.join(parts))
+    for tkr in TICKERS:
+        daily = get_data(tkr, "1d")
+        weekly = get_data(tkr, "1wk")
+        d = detect_cross(daily)
+        w = detect_cross(weekly)
+        if d or w:
+            lines = [f"📈 {tkr} 교차 감지"]
+            if d:
+                lines.append("• 일단위: " + ", ".join([f"{p}일선({d})" for p, d in d]))
+            if w:
+                lines.append("• 주단위: " + ", ".join([f"{p}주선({d})" for p, d in w]))
+            alerts.append("\n".join(lines))
 
     if alerts:
-        send_telegram('🚨 이동평균선 교차 감지:\n' + '\n'.join(alerts))
+        msg = "🚨 이동평균선 교차 알림 🚨\n\n" + "\n\n".join(alerts)
+        send_telegram(msg)
+        print(msg)
     else:
-        send_telegram('✅ 교차 없음 (최근 데이터 기준)')
+        print("✅ 교차 없음")
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
+
