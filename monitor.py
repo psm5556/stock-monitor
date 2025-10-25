@@ -4,6 +4,7 @@ import math
 import requests
 import yfinance as yf
 import pandas as pd
+import pytz
 from datetime import datetime
 
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
