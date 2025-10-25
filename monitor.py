@@ -71,7 +71,7 @@ def detect_ma_touch(df):
         gap = (close - ma) / ma
 
         # 근접 감지
-        if abs(gap) <= TOLERANCE:
+        if abs(gap) * 100 <= TOLERANCE:
             touches.append((p, round(gap*100,2), "근접"))
 
         # 하향이탈 감지 (근접과 중복 허용)
