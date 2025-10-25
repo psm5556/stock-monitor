@@ -135,6 +135,7 @@ def is_downtrend(df: pd.DataFrame, lookback: int = 20) -> bool:
 def detect_ma_touch(df, tolerance=0.005):
     touches = []
     last = df.iloc[-1]
+
     for p in MA_LIST:
         col = f"MA{p}"
         if col not in df.columns or pd.isna(last[col]):
@@ -142,18 +143,21 @@ def detect_ma_touch(df, tolerance=0.005):
 
         close_price = last["Close"]
         ma_value = last[col]
-        gap = abs(close_price - ma_value) / ma_value
+        gap = (close_price - ma_value) / ma_value
+        abs_gap = abs(gap)
 
-        # ✅ 조건 1: MA 근접(0.5% 이내)
-        is_near = gap <= tolerance
+        # 조건 분리
+        if abs_gap <= tolerance:
+            status = "근접"   # Close ≈ MA
+        elif close_price < ma_value:
+            status = "하향이탈"  # Close < MA
+        else:
+            continue
 
-        # ✅ 조건 2: 현재가가 MA 아래에 위치 (더 싸게 매수 기회)
-        is_below = close_price < ma_value
-
-        if is_near or is_below:
-            touches.append(p)
+        touches.append((p, round(gap * 100, 2), status))
 
     return touches
+
 
 def detect_signals_for_symbol(symbol: str) -> dict:
     """
@@ -219,23 +223,18 @@ def build_alert_message(results: list[dict]) -> str:
 
         # Daily
         if r["daily"]:
-            last_d = dfd.iloc[-1]
-            texts = []
-            for p in r["daily"]:
-                gap = calc_gap(last_d["Close"], last_d[f"MA{p}"])
-                arrow = "▼" if gap < 0 else "▲"
-                texts.append(f"{arrow}{gap}% (MA{p})")
-            msg_daily.append(f"- {name} ({sym})  " + ", ".join(texts))
-
-        # Weekly
+            has_daily = True
+            daily_msg += f"- {r['name']} ({sym})\n"
+            for p, gap, status in r["daily"]:
+                emoji = "✅" if status == "근접" else "🔻"
+                daily_msg += f"   {emoji} MA{p} {status} ({gap:+.2f}%)\n"
+        
         if r["weekly"]:
-            last_w = dfw.iloc[-1]
-            texts = []
-            for p in r["weekly"]:
-                gap = calc_gap(last_w["Close"], last_w[f"MA{p}"])
-                arrow = "▼" if gap < 0 else "▲"
-                texts.append(f"{arrow}{gap}% (MA{p})")
-            msg_weekly.append(f"- {name} ({sym})  " + ", ".join(texts))
+            has_weekly = True
+            weekly_msg += f"- {r['name']} ({sym})\n"
+            for p, gap, status in r["weekly"]:
+                emoji = "✅" if status == "근접" else "🔻"
+                weekly_msg += f"   {emoji} MA{p} {status} ({gap:+.2f}%)\n"
 
     body = ""
     if len(msg_daily) > 1:
