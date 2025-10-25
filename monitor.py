@@ -73,6 +73,11 @@ def is_downtrend(df, lookback=20):
     ma200_slope = (df["MA200"].iloc[-1] - df["MA200"].iloc[-lookback]) / lookback if "MA200" in df.columns else 0
     return (close_slope < 0) or (ma200_slope < 0)
 
+# =========================
+# 괴리율 계산 함수
+# =========================
+def calc_gap(last_close, ma_value):
+    return round((last_close - ma_value) / ma_value * 100, 2)
 
 # ✅ MA 근접 판단
 def detect_ma_touch(df, tolerance=0.005):
