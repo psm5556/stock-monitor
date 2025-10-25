@@ -56,7 +56,7 @@ def get_price(symbol, interval="1d"):
     df = df[["Open", "High", "Low", "Close", "Volume"]].copy()
     for p in MA_LIST:
         df[f"MA{p}"] = df["Close"].rolling(p).mean()
-    df.dropna(inplace=True)
+    # df.dropna(inplace=True)
     return df if not df.empty else None
 
 
