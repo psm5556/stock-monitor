@@ -161,8 +161,8 @@ def build_alert_messages(results):
                 msg += f"- {name} ({sym})\n   {emoji} MA{p} ({gap:+.2f}%)\n"
         return msg
 
-    msg_near = build_msg("[수동] 장기 MA 근접", near_daily, near_weekly)
-    msg_break = build_msg("[수동] 장기 MA 하향이탈", break_daily, break_weekly)
+    msg_near = build_msg("장기 MA 근접", near_daily, near_weekly)
+    msg_break = build_msg("장기 MA 하향이탈", break_daily, break_weekly)
 
     return msg_near, msg_break
 
