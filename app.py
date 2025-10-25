@@ -1,114 +1,94 @@
 import streamlit as st
 import pandas as pd
 import yfinance as yf
-import datetime
-import requests
-import time
+import datetime as dt
 
-# ===============================
-# 🔧 설정
-# ===============================
-TELEGRAM_BOT_TOKEN = "여기에_본인_텔레그램_봇_토큰_입력"
-TELEGRAM_CHAT_ID = "여기에_본인_Chat_ID_입력"
+st.set_page_config(page_title="📈 이동평균선 교차 모니터링", layout="wide")
+st.title("📈 이동평균선 교차 모니터링 대시보드 (Daily & Weekly)")
 
-# 모니터링할 티커 (예시)
-WATCHLIST = ["AAPL", "MSFT", "NVDA", "TSLA", "GOOG", "AMZN"]
+# 미리 지정된 모니터링 대상 (필요시 여기를 수정하세요)
+TICKERS = ["AAPL", "MSFT", "NVDA", "TSLA", "GOOG"]
+PERIODS = [200, 240, 365]
 
-# ===============================
-# 📤 텔레그램 알림 함수
-# ===============================
-def send_telegram_alert(message: str):
-    try:
-        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-        payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message}
-        requests.post(url, data=payload)
-    except Exception as e:
-        print(f"[ERROR] 텔레그램 전송 실패: {e}")
-
-# ===============================
-# 📈 데이터 수집 함수
-# ===============================
-def get_data(ticker, interval="1d", period="2y"):
+# 안정적 history() 사용 + 방어적 처리
+@st.cache_data(ttl=3600)
+def get_data(ticker, interval="1d"):
+    # interval: '1d' 또는 '1wk'
+    period = "2y" if interval == "1d" else "5y"
     try:
         stock = yf.Ticker(ticker)
         df = stock.history(period=period, interval=interval)
-        if df.empty or "Close" not in df.columns:
+        # 기본 컬럼 확인
+        if df is None or df.empty or "Close" not in df.columns:
             return pd.DataFrame()
-        for ma in [200, 240, 365]:
-            df[f"MA{ma}"] = df["Close"].rolling(ma).mean()
+        # 이동평균 계산
+        for p in PERIODS:
+            df[f"MA{p}"] = df["Close"].rolling(p).mean()
         return df
     except Exception as e:
-        print(f"[ERROR] {ticker} 데이터 수집 실패: {e}")
         return pd.DataFrame()
 
-# ===============================
-# ⚙️ 교차 체크 함수
-# ===============================
-def check_cross(df, ticker, timeframe="일"):
-    if df.empty:
-        return None
+col1, col2 = st.columns([1, 3])
+with col1:
+    selected = st.selectbox("📊 종목 선택", TICKERS)
+    st.write("모니터링 대상 티커는 app.py 내부의 TICKERS 리스트를 수정하여 변경할 수 있습니다.")
+with col2:
+    st.write("최근 주가 및 이동평균선 (일/주 단위)")
 
-    latest = df.iloc[-1]
-    close = latest["Close"]
-    alerts = []
-    for ma in [200, 240, 365]:
-        ma_value = latest[f"MA{ma}"]
-        prev = df.iloc[-2][f"MA{ma}"]
-        if pd.notna(ma_value) and pd.notna(prev):
-            if (close >= ma_value and df.iloc[-2]["Close"] < prev) or \
-               (close <= ma_value and df.iloc[-2]["Close"] > prev):
-                alerts.append(f"{ticker} — {timeframe} {ma}일선 교차 감지!")
+# 안전한 차트 렌더링 함수
+def safe_line_chart(df, label):
+    if df is None or df.empty:
+        st.warning(f"{label}: 데이터가 없습니다.")
+        return
+    cols = [c for c in ["Close", "MA200", "MA240", "MA365"] if c in df.columns]
+    if len(cols) < 2:
+        st.info(f"{label}: 표시할 유효 컬럼이 부족합니다.")
+        return
+    st.subheader(label)
+    st.line_chart(df[cols].dropna())
 
-    return alerts
+# 일간 데이터
+daily = get_data(selected, "1d")
+safe_line_chart(daily, "📅 일 단위 (Daily) 차트")
 
-# ===============================
-# 🚀 메인 실행 함수
-# ===============================
-def main():
-    st.set_page_config(page_title="Stock MA Alert", layout="wide")
-    st.title("📊 이동평균선 교차 모니터링 시스템")
-    st.caption("200, 240, 365일선 + 주간 동일 조건 감시")
+# 주간 데이터
+weekly = get_data(selected, "1wk")
+safe_line_chart(weekly, "🗓️ 주 단위 (Weekly) 차트")
 
-    alert_list = []
+# 교차 감지 함수
+def detect_cross(data):
+    cross = []
+    # 최근 2개 캔들(바)을 비교하여 교차(상향/하향)를 판단합니다.
+    if data is None or data.empty or len(data) < 2:
+        return cross
+    for p in PERIODS:
+        col = f"MA{p}"
+        if col not in data.columns:
+            continue
+        prev_close = data['Close'].iloc[-2]
+        last_close = data['Close'].iloc[-1]
+        prev_ma = data[col].iloc[-2]
+        last_ma = data[col].iloc[-1]
+        # NaN 방어
+        if pd.isna(prev_ma) or pd.isna(last_ma):
+            continue
+        if prev_close < prev_ma and last_close >= last_ma:
+            cross.append((p, '상향'))
+        elif prev_close > prev_ma and last_close <= last_ma:
+            cross.append((p, '하향'))
+    return cross
 
-    with st.spinner("데이터 수집 중..."):
-        for ticker in WATCHLIST:
-            df_daily = get_data(ticker, "1d", "2y")
-            df_weekly = get_data(ticker, "1wk", "5y")
+daily_cross = detect_cross(daily)
+weekly_cross = detect_cross(weekly)
 
-            daily_alerts = check_cross(df_daily, ticker, "일")
-            weekly_alerts = check_cross(df_weekly, ticker, "주")
+if daily_cross or weekly_cross:
+    msg_lines = []
+    if daily_cross:
+        msg_lines.append("일 단위: " + ", ".join([f"{p}일선({dir})" for p,dir in daily_cross]))
+    if weekly_cross:
+        msg_lines.append("주 단위: " + ", ".join([f"{p}주선({dir})" for p,dir in weekly_cross]))
+    st.error("🚨 교차 발생 — " + " / ".join(msg_lines))
+else:
+    st.success("✅ 최근 교차 없음")
 
-            if daily_alerts:
-                alert_list.extend(daily_alerts)
-            if weekly_alerts:
-                alert_list.extend(weekly_alerts)
-
-    # ===============================
-    # 🧾 결과 표시
-    # ===============================
-    if alert_list:
-        st.success("🚨 교차 발생 감지!")
-        for a in alert_list:
-            st.write(a)
-        message = "\n".join(alert_list)
-        send_telegram_alert(f"📢 MA 교차 감지 알림\n{message}")
-    else:
-        st.info("현재 교차 조건을 만족하는 종목이 없습니다.")
-
-    st.markdown("---")
-    st.markdown("⏱️ 마지막 실행 시각: " + datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-
-    st.markdown("""
-    ### ⚙️ 자동실행 설정 (예시)
-    - Streamlit Cloud에서 주기 실행은 직접 지원되지 않으므로,
-      GitHub + [cron-job.org](https://cron-job.org/) 또는 GitHub Actions로 10분 간격으로 호출할 수 있습니다.
-    - 예시 URL:  
-      `https://your-app.streamlit.app/`
-    """)
-
-# ===============================
-# 🕒 자동실행 (로컬 테스트 시)
-# ===============================
-if __name__ == "__main__":
-    main()
+st.caption(f"마지막 업데이트: {dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
