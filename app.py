@@ -146,11 +146,11 @@ def detect_ma_touch(df, tolerance=0.005):
         gap = (close_price - ma_value) / ma_value
         abs_gap = abs(gap)
 
-        # 조건 분리
+        # 조건별 상태 분리
         if abs_gap <= tolerance:
-            status = "근접"   # Close ≈ MA
+            status = "근접"
         elif close_price < ma_value:
-            status = "하향이탈"  # Close < MA
+            status = "하향이탈"
         else:
             continue
 
@@ -160,31 +160,60 @@ def detect_ma_touch(df, tolerance=0.005):
 
 
 def detect_signals_for_symbol(symbol: str) -> dict:
-    """
-    심볼 단위로 일봉/주봉 모두 검사.
-    하락 추세 + MA 접근/터치가 있을 때만 기록.
-    반환: {"symbol": str, "name": str, "daily": [..], "weekly": [..]}
-    """
     name = get_company_name(symbol)
     out = {"symbol": symbol, "name": name, "daily": [], "weekly": []}
 
-    # 일봉
-    dfd = get_price(symbol, "1d")
-    if dfd is not None and not dfd.empty:
-        if is_downtrend(dfd):
-            touches_d = detect_ma_touch(dfd, tolerance=0.005)  # 0.5%
-            if touches_d:
-                out["daily"] = touches_d
-
-    # 주봉
-    dfw = get_price(symbol, "1wk")
-    if dfw is not None and not dfw.empty:
-        if is_downtrend(dfw):
-            touches_w = detect_ma_touch(dfw, tolerance=0.005)
-            if touches_w:
-                out["weekly"] = touches_w
+    for interval, key in [("1d", "daily"), ("1wk", "weekly")]:
+        df = get_price(symbol, interval)
+        if df is not None and is_downtrend(df):
+            touches = detect_ma_touch(df)
+            if touches:
+                out[key] = touches
 
     return out
+
+
+def build_alert_message(results: list[dict]) -> str:
+    KST = pytz.timezone("Asia/Seoul")
+    ts = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
+    header = f"📬 장기 MA 접근 감지 결과 ({ts})\n"
+
+    daily_msg = ""
+    weekly_msg = ""
+    has_daily = False
+    has_weekly = False
+
+    for r in results:
+        sym = r["symbol"]
+        name = r["name"]
+
+        if r["daily"]:
+            has_daily = True
+            daily_msg += f"- {name} ({sym})\n"
+            for p, gap, status in r["daily"]:
+                emoji = "✅" if status == "근접" else "🔻"
+                daily_msg += f"   {emoji} MA{p} {status} ({gap:+.2f}%)\n"
+
+        if r["weekly"]:
+            has_weekly = True
+            weekly_msg += f"- {name} ({sym})\n"
+            for p, gap, status in r["weekly"]:
+                emoji = "✅" if status == "근접" else "🔻"
+                weekly_msg += f"   {emoji} MA{p} {status} ({gap:+.2f}%)\n"
+
+    msg = header
+    if has_daily:
+        msg += "\n📅 Daily\n" + daily_msg
+    if has_weekly:
+        msg += "\n🗓 Weekly\n" + weekly_msg
+    if not (has_daily or has_weekly):
+        msg += "\n이번 스캔에서는 감지된 종목이 없습니다."
+
+    if len(msg) > 3800:
+        msg = msg[:3700] + "\n…(내용 축약)"
+
+    return msg
+
 
 # =========================
 # Telegram 전송 (한 번에 묶어서 1건)
