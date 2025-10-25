@@ -1,14 +1,13 @@
 # monitor.py
 import os
-import math
 import requests
 import yfinance as yf
 import pandas as pd
 import pytz
 from datetime import datetime
 
-BOT_TOKEN = os.environ.get('BOT_TOKEN')
-CHAT_ID = os.environ.get('CHAT_ID')
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
+CHAT_ID = os.environ.get("CHAT_ID")
 
 TICKERS = [
     "AAPL", "ABCL", "ACHR", "AEP", "AES", "ALAB", "AMD", "AMZN", "ANET",
@@ -26,7 +25,7 @@ TICKERS = [
     "SNPS", "SO", "SOFI", "SPCE", "SPWR", "SQ", "SRE", "STEM", "TLT",
     "TMO", "TSLA", "TSM", "TWST", "UBT", "UNH", "V", "VLO", "VRT", "VST",
     "WMT", "HON", "TXG", "XOM", "ZPTA"
-]  # ABB & CONE 제거됨
+]
 
 MA_LIST = [200, 240, 365]
 
@@ -35,82 +34,70 @@ MA_LIST = [200, 240, 365]
 def get_company_name(symbol):
     try:
         info = yf.Ticker(symbol).info
-        name = info.get("longName") or info.get("shortName")
-        return name if name else symbol
+        return info.get("longName") or info.get("shortName") or symbol
     except:
         return symbol
 
 
-# ✅ 가격 데이터 가져오기 (app.py와 동일)
+# ✅ 가격 데이터 (app.py 동일)
 def get_price(symbol, interval="1d"):
     period = "10y" if interval == "1wk" else "3y"
+    ticker = yf.Ticker(symbol)
     try:
-        # df = yf.Ticker(symbol).history(period=period, interval=interval)
-        try:
-            df = yf.Ticker(symbol).history(period=period, interval=interval)
-            if df.empty:
-                # fallback: 전체 데이터
-                df = yf.Ticker(symbol).history(period="max", interval=interval)
-        except Exception:
-            df = yf.Ticker(symbol).history(period="max", interval=interval)
-        return df
-        if df is None or df.empty:
-            return None
-        df = df[["Open","High","Low","Close","Volume"]].copy()
-        for p in MA_LIST:
-            df[f"MA{p}"] = df["Close"].rolling(p).mean()
-        df = df.dropna()
-        return df
+        df = ticker.history(period=period, interval=interval)
+        if df.empty:
+            df = ticker.history(period="max", interval=interval)
     except:
+        df = ticker.history(period="max", interval=interval)
+
+    if df is None or df.empty:
         return None
 
+    df = df[["Open", "High", "Low", "Close", "Volume"]].copy()
+    for p in MA_LIST:
+        df[f"MA{p}"] = df["Close"].rolling(p).mean()
 
-# ✅ 하락 추세 확인
+    df.dropna(inplace=True)
+    return df if not df.empty else None
+
+
+# ✅ 하락 추세
 def is_downtrend(df, lookback=20):
     if len(df) < lookback + 1:
         return False
-    close_slope = (df["Close"].iloc[-1] - df["Close"].iloc[-lookback]) / lookback
-    ma200_slope = (df["MA200"].iloc[-1] - df["MA200"].iloc[-lookback]) / lookback if "MA200" in df.columns else 0
-    return (close_slope < 0) or (ma200_slope < 0)
+    slope = (df.Close.iloc[-1] - df.Close.iloc[-lookback]) / lookback
+    return slope < 0
 
-# =========================
-# 괴리율 계산 함수
-# =========================
+
+# ✅ 괴리율 계산
 def calc_gap(last_close, ma_value):
     return round((last_close - ma_value) / ma_value * 100, 2)
 
-# ✅ MA 근접 판단
-def detect_ma_touch(df, tolerance=0.005):
+
+# ✅ MA Touch 감지
+def detect_ma_touch(df, tol=0.005):
     touches = []
     last = df.iloc[-1]
     for p in MA_LIST:
         col = f"MA{p}"
-        if col not in df.columns or pd.isna(last[col]):
-            continue
-        gap = abs(last["Close"] - last[col]) / last[col]
-        if gap <= tolerance:
-            touches.append(p)
+        if col in df.columns:
+            if abs(last.Close - last[col]) / last[col] <= tol:
+                touches.append(p)
     return touches
 
 
-# ✅ 심볼 단위 감지
+# ✅ 감지 수행
 def scan(symbol):
     name = get_company_name(symbol)
-    result = {"symbol": symbol, "name": name, "daily": [], "weekly": []}
-
-    # Day
     dfd = get_price(symbol, "1d")
-    if dfd is not None and is_downtrend(dfd):
-        t = detect_ma_touch(dfd)
-        if t: result["daily"] = t
-
-    # Week
     dfw = get_price(symbol, "1wk")
-    if dfw is not None and is_downtrend(dfw):
-        t = detect_ma_touch(dfw)
-        if t: result["weekly"] = t
 
-    return result
+    return {
+        "symbol": symbol,
+        "name": name,
+        "daily": detect_ma_touch(dfd) if dfd is not None and is_downtrend(dfd) else [],
+        "weekly": detect_ma_touch(dfw) if dfw is not None and is_downtrend(dfw) else [],
+    }
 
 
 # ✅ Telegram 전송
@@ -119,33 +106,58 @@ def send_telegram(msg):
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
         requests.post(url, json={"chat_id": CHAT_ID, "text": msg})
     except Exception as e:
-        print("Telegram 전송 실패:", e)
+        print("Telegram Error:", e)
 
 
-# ✅ 실행
-results = []
+# ✅ 메시지 구성 (app.py 개선 기반)
+KST = pytz.timezone("Asia/Seoul")
+timestamp = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
+header = f"📬 장기 MA 접근 감지 ({timestamp})\n"
+
+daily_msg = "\n📅 Daily\n"
+weekly_msg = "\n🗓 Weekly\n"
+
+has_daily = has_weekly = False
+
 for sym in TICKERS:
     r = scan(sym)
-    if r["daily"] or r["weekly"]:
-        results.append(r)
+    if not r["daily"] and not r["weekly"]:
+        continue
 
+    # price refresh
+    dfd = get_price(sym, "1d")
+    dfw = get_price(sym, "1wk")
 
-# ✅ 메시지 구성 (C 방식)
-# ts = datetime.now().strftime("%Y-%m-%d %H:%M")
-KST = pytz.timezone("Asia/Seoul")
-ts = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
-msg = f"📬 장기 MA 접근 감지 결과 ({ts})\n\n"
+    last_d = dfd.iloc[-1] if dfd is not None else None
+    last_w = dfw.iloc[-1] if dfw is not None else None
 
-if not results:
-    msg += "이번 스캔에서는 감지된 종목이 없습니다."
-else:
-    for r in results:
+    # ✅ Daily 메시지
+    if r["daily"]:
+        has_daily = True
         parts = []
-        if r["daily"]:
-            parts.append(f"일봉: {', '.join([f'MA{p}' for p in r['daily']])}")
-        if r["weekly"]:
-            parts.append(f"주봉: {', '.join([f'MA{p}' for p in r['weekly']])}")
-        msg += f"- {r['name']} ({r['symbol']}): " + " / ".join(parts) + "\n"
+        for p in r["daily"]:
+            gap = calc_gap(last_d.Close, last_d[f"MA{p}"])
+            arrow = "▼" if gap < 0 else "▲"
+            parts.append(f"{arrow}{gap}% (MA{p})")
+        daily_msg += f"- {r['name']} ({sym})  " + ", ".join(parts) + "\n"
 
+    # ✅ Weekly 메시지
+    if r["weekly"]:
+        has_weekly = True
+        parts = []
+        for p in r["weekly"]:
+            gap = calc_gap(last_w.Close, last_w[f"MA{p}"])
+            arrow = "▼" if gap < 0 else "▲"
+            parts.append(f"{arrow}{gap}% (MA{p})")
+        weekly_msg += f"- {r['name']} ({sym})  " + ", ".join(parts) + "\n"
+
+# ✅ 최종 메시지 구성
+msg = header
+if has_daily: msg += daily_msg
+if has_weekly: msg += weekly_msg
+if not (has_daily or has_weekly):
+    msg += "감지된 종목 없음"
+
+# ✅ Telegram 발송
 send_telegram(msg)
-print("✅ Scan done & Telegram sent.")
+print("✅ Scan Done & Telegram Sent")
