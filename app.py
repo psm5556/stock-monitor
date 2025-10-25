@@ -195,7 +195,7 @@ def build_alert_message(results: list[dict]) -> str:
     KST = pytz.timezone("Asia/Seoul")
     ts = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
     
-    header = f"📬 장기 MA 접근 감지 ({ts})\n"
+    header = f"📬 [수동] 장기 MA 접근 감지 ({ts})\n"
     
     if not results:
         return header + "이번 스캔에서는 감지된 종목이 없습니다."
