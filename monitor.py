@@ -118,7 +118,9 @@ for sym in TICKERS:
 
 
 # ✅ 메시지 구성 (C 방식)
-ts = datetime.now().strftime("%Y-%m-%d %H:%M")
+# ts = datetime.now().strftime("%Y-%m-%d %H:%M")
+KST = pytz.timezone("Asia/Seoul")
+ts = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
 msg = f"📬 장기 MA 접근 감지 결과 ({ts})\n\n"
 
 if not results:
