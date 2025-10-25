@@ -1,78 +1,91 @@
+# app.py
 import streamlit as st
 import pandas as pd
 import yfinance as yf
 import datetime as dt
 
 st.set_page_config(page_title="📈 이동평균선 교차 모니터링", layout="wide")
-st.title("📈 이동평균선 교차 모니터링 대시보드 (Daily & Weekly)")
+st.title("📈 이동평균선 교차 모니터링 (Daily & Weekly)")
 
-# 미리 지정된 모니터링 대상
-TICKERS = [
-    "AAPL", "ABB", "ABCL", "ACHR", "AEP",
-    "AES", "ALAB", "AMD", "AMZN", "ANET", "ARQQ", "ARRY", "ASML", "ASTS", "AVGO",
-    "BA", "BAC", "BE", "BEP", "BLK", "BMNR", "BP", "BTQ", "BWXT", "C", "CARR",
-    "CDNS", "CEG", "CFR.SW", "CGON", "CLPT", "COIN", "CONE", "CONL", "COP", "COST",
-    "CRCL", "CRDO", "CRM", "CRSP", "CSCO", "CVX", "D", "DELL", "DNA", "DUK", "ED",
-    "EMR", "ENPH", "ENR", "EOSE", "EQIX", "ETN", "EXC", "FLNC", "FSLR", "GEV", "GLD",
-    "GOOGL", "GS", "HOOD", "HSBC", "HUBB", "IBM", "INTC", "IONQ", "JCI", "JOBY", "JPM",
-    "KO", "LAES", "LMT", "LRCX", "LVMUY", "MA", "MPC", "MSFT", "MSTR", "NEE", "NGG",
-    "NOC", "NRG", "NRGV", "NTLA", "NTRA", "NVDA", "OKLO", "ON", "ORCL", "OXY", "PCG",
-    "PG", "PLTR", "PLUG", "PSTG", "PYPL", "QBTS", "QS", "QUBT", "QURE", "RGTI", "RKLB",
-    "ROK", "SBGSY", "SEDG", "SHEL", "SIEGY", "SLDP", "SMR", "SNPS", "SO", "SOFI",
-    "SPCE", "SPWR", "SQ", "SRE", "STEM", "TLT", "TMO", "TSLA", "TSM", "TWST", "UBT",
-    "UNH", "V", "VLO", "VRT", "VST", "WMT", "HON", "TXG", "XOM", "ZPTA"
-] # 25.10.25
+TICKERS = ["AAPL", "MSFT", "NVDA", "TSLA", "GOOG"]
 PERIODS = [200, 240, 365]
 
 
 @st.cache_data(ttl=3600)
+def get_company_name(ticker):
+    try:
+        info = yf.Ticker(ticker).info
+        return info.get("longName") or info.get("shortName") or ticker
+    except:
+        return ticker
+
+
+@st.cache_data(ttl=3600)
 def get_data(ticker, interval="1d"):
-    t = yf.Ticker(ticker)
-    df = t.history(period="5y", interval=interval, auto_adjust=True)
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = df.columns.get_level_values(0)
+    df = yf.download(ticker, period="2y", interval=interval, auto_adjust=True, progress=False)
+    if df.empty:
+        return df
+    df.columns = [c[0] if isinstance(c, tuple) else c for c in df.columns]
     if "Close" not in df.columns:
         return pd.DataFrame()
     for p in PERIODS:
-        df[f"MA{p}"] = df["Close"].rolling(p, min_periods=1).mean()
-    return df.dropna(subset=["Close"])
+        df[f"MA{p}"] = df["Close"].rolling(p, min_periods=p).mean()
+    return df.dropna()
 
-def detect_cross(data):
-    cross = []
-    if len(data) < 2:
-        return cross
+
+def detect_cross(df):
+    result = []
+    if len(df) < 2:
+        return result
+    prev, curr = df.iloc[-2], df.iloc[-1]
     for p in PERIODS:
         col = f"MA{p}"
-        if col not in data.columns:
-            continue
-        if data["Close"].iloc[-2] < data[col].iloc[-2] and data["Close"].iloc[-1] >= data[col].iloc[-1]:
-            cross.append((p, "상향"))
-        elif data["Close"].iloc[-2] > data[col].iloc[-2] and data["Close"].iloc[-1] <= data[col].iloc[-1]:
-            cross.append((p, "하향"))
-    return cross
+        if col in df.columns:
+            if prev["Close"] < prev[col] and curr["Close"] >= curr[col]:
+                result.append((p, "상향"))
+            elif prev["Close"] > prev[col] and curr["Close"] <= curr[col]:
+                result.append((p, "하향"))
+    return result
 
-# ✅ 전체 종목 분석
-results = []
-for ticker in TICKERS:
-    daily = get_data(ticker, "1d")
-    weekly = get_data(ticker, "1wk")
+
+st.subheader("📌 전체 종목 교차 요약")
+summary_rows = []
+
+for t in TICKERS:
+    daily = get_data(t, "1d")
+    weekly = get_data(t, "1wk")
+    name = get_company_name(t)
     daily_cross = detect_cross(daily)
     weekly_cross = detect_cross(weekly)
-    if daily_cross or weekly_cross:
-        result = {"종목": ticker, "일단위": daily_cross, "주단위": weekly_cross}
-        results.append(result)
 
-# ✅ 결과 표시
-if results:
-    st.error("🚨 교차 발생 종목 감지됨!")
-    for r in results:
-        msg = f"**{r['종목']}** → "
-        if r["일단위"]:
-            msg += "일단위: " + ", ".join([f"{p}일선({d})" for p, d in r["일단위"]]) + " / "
-        if r["주단위"]:
-            msg += "주단위: " + ", ".join([f"{p}주선({d})" for p, d in r["주단위"]])
-        st.write(msg)
-else:
-    st.success("✅ 최근 교차 없음 (전체 종목 기준)")
+    summary_rows.append({
+        "Ticker": t,
+        "Name": name,
+        "Daily": ", ".join([f"{p}일선({d})" for p, d in daily_cross]) if daily_cross else "",
+        "Weekly": ", ".join([f"{p}주선({d})" for p, d in weekly_cross]) if weekly_cross else "",
+    })
 
-st.caption(f"마지막 업데이트: {dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+df_summary = pd.DataFrame(summary_rows)
+st.dataframe(df_summary, use_container_width=True, hide_index=True)
+
+st.divider()
+
+# 🎯 선택 종목 차트
+selected = st.selectbox("📊 종목 선택", TICKERS)
+daily_sel = get_data(selected, "1d")
+weekly_sel = get_data(selected, "1wk")
+
+def plot_chart(df, title):
+    if df.empty: 
+        st.warning("데이터가 없습니다.")
+        return
+    cols = ["Close", "MA200", "MA240", "MA365"]
+    cols = [c for c in cols if c in df.columns]
+    st.line_chart(df[cols])
+    st.subheader(title)
+
+
+plot_chart(daily_sel, "📅 Daily Chart")
+plot_chart(weekly_sel, "🗓️ Weekly Chart")
+
+st.caption(f"🕒 마지막 업데이트: {dt.datetime.now():%Y-%m-%d %H:%M:%S}")
