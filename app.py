@@ -108,6 +108,11 @@ def get_price(symbol: str, interval: str = "1d") -> pd.DataFrame | None:
         print(f"[{symbol}][{interval}] get_price error:", str(e))
         return None
 
+# =========================
+# 괴리율 계산 함수
+# =========================
+def calc_gap(last_close, ma_value):
+    return round((last_close - ma_value) / ma_value * 100, 2)
 
 # =========================
 # 장기 하락 중 MA '접근/터치' 감지
@@ -187,35 +192,55 @@ def send_telegram_message(text: str) -> bool:
         return False
 
 def build_alert_message(results: list[dict]) -> str:
-    """
-    감지 결과를 한 건의 메시지로 정리
-    """
     KST = pytz.timezone("Asia/Seoul")
     ts = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
-    # ts = datetime.now().strftime("%Y-%m-%d %H:%M")
-    header = f"📬 장기 MA 접근 감지 결과 ({ts})\n"
+    
+    header = f"📬 장기 MA 접근 감지 ({ts})\n"
+    
     if not results:
         return header + "이번 스캔에서는 감지된 종목이 없습니다."
 
-    lines = []
-    for r in results:
-        parts = []
-        if r["daily"]:
-            parts.append(f"일봉: {', '.join([f'MA{p}' for p in r['daily']])}")
-        if r["weekly"]:
-            parts.append(f"주봉: {', '.join([f'MA{p}' for p in r['weekly']])}")
-        if parts:
-            lines.append(f"- {r['name']} ({r['symbol']}): " + " / ".join(parts))
+    msg_daily = ["\n📅 Daily"]
+    msg_weekly = ["\n🗓 Weekly"]
 
-    if not lines:
+    for r in results:
+        sym = r["symbol"]
+        name = r["name"]
+
+        # 최신 가격 획득
+        dfd = get_price(sym, "1d")
+        dfw = get_price(sym, "1wk")
+
+        # Daily
+        if r["daily"]:
+            last_d = dfd.iloc[-1]
+            texts = []
+            for p in r["daily"]:
+                gap = calc_gap(last_d["Close"], last_d[f"MA{p}"])
+                arrow = "▼" if gap < 0 else "▲"
+                texts.append(f"{arrow}{gap}% (MA{p})")
+            msg_daily.append(f"- {name} ({sym})  " + ", ".join(texts))
+
+        # Weekly
+        if r["weekly"]:
+            last_w = dfw.iloc[-1]
+            texts = []
+            for p in r["weekly"]:
+                gap = calc_gap(last_w["Close"], last_w[f"MA{p}"])
+                arrow = "▼" if gap < 0 else "▲"
+                texts.append(f"{arrow}{gap}% (MA{p})")
+            msg_weekly.append(f"- {name} ({sym})  " + ", ".join(texts))
+
+    body = ""
+    if len(msg_daily) > 1:
+        body += "\n".join(msg_daily)
+    if len(msg_weekly) > 1:
+        body += "\n" + "\n".join(msg_weekly)
+
+    if not body.strip():
         return header + "이번 스캔에서는 감지된 종목이 없습니다."
 
-    body = "\n".join(lines)
-    msg = header + body
-    # 텔레그램 4096자 제한 대비 (되도록 한 건 유지, 초과시 뒤를 잘라 알림)
-    if len(msg) > 3800:
-        msg = msg[:3700] + "\n…(너무 많은 결과로 일부 생략)"
-    return msg
+    return header + body
 
 # =========================
 # 앱 최초 실행 시에만 전체 스캔 & 전송
