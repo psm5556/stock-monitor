@@ -182,7 +182,9 @@ def build_alert_message(results: list[dict]) -> str:
     """
     감지 결과를 한 건의 메시지로 정리
     """
-    ts = datetime.now().strftime("%Y-%m-%d %H:%M")
+    KST = pytz.timezone("Asia/Seoul")
+    ts = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
+    # ts = datetime.now().strftime("%Y-%m-%d %H:%M")
     header = f"📬 장기 MA 접근 감지 결과 ({ts})\n"
     if not results:
         return header + "이번 스캔에서는 감지된 종목이 없습니다."
