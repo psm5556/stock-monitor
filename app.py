@@ -26,8 +26,8 @@ def get_data(symbol, interval="1d", period="2y"):
     data = yf.download(symbol, period=period, interval=interval, progress=False)
 
     # MultiIndex일 경우 첫 번째 레벨로 변경
-    if isinstance(data.columns, pd.MultiIndex):
-        data.columns = [col[0] for col in data.columns]
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
 
     # Close 컬럼이 존재하지 않으면 종료
     if "Close" not in data.columns:
