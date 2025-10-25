@@ -72,7 +72,7 @@ def detect_ma_touch(df):
         if pd.isna(ma): continue
 
         close = last["Close"]
-        gap = (close - ma) / ma * 100
+        gap = (close - ma) / ma
 
         # 근접 조건
         if abs(gap) <= TOLERANCE:
