@@ -202,50 +202,53 @@ def send_telegram_message(text: str) -> bool:
         return False
 
 def build_alert_message(results: list[dict]) -> str:
+    # ✅ timestamp
     KST = pytz.timezone("Asia/Seoul")
-    ts = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
+    timestamp = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
     
-    header = f"📬 [수동] 장기 MA 접근 감지 ({ts})\n"
-    
-    if not results:
-        return header + "이번 스캔에서는 감지된 종목이 없습니다."
+    header = f"📬 장기 MA 접근 감지 결과 ({timestamp})\n"
 
-    msg_daily = ["\n📅 Daily"]
-    msg_weekly = ["\n🗓 Weekly"]
+    # ✅ 초기화 (UnboundLocalError 방지)
+    daily_msg = ""
+    weekly_msg = ""
+    has_daily = False
+    has_weekly = False
 
     for r in results:
         sym = r["symbol"]
         name = r["name"]
 
-        # 최신 가격 획득
-        dfd = get_price(sym, "1d")
-        dfw = get_price(sym, "1wk")
-
-        # Daily
+        # ✅ Daily
         if r["daily"]:
             has_daily = True
-            daily_msg += f"- {r['name']} ({r['symbol']})\n"
+            daily_msg += f"- {name} ({sym})\n"
             for p, gap, status in r["daily"]:
                 emoji = "✅" if status == "근접" else "🔻"
                 daily_msg += f"   {emoji} MA{p} {status} ({gap:+.2f}%)\n"
-        
+
+        # ✅ Weekly
         if r["weekly"]:
             has_weekly = True
-            weekly_msg += f"- {r['name']} ({r['symbol']})\n"
+            weekly_msg += f"- {name} ({sym})\n"
             for p, gap, status in r["weekly"]:
                 emoji = "✅" if status == "근접" else "🔻"
                 weekly_msg += f"   {emoji} MA{p} {status} ({gap:+.2f}%)\n"
 
-    body = ""
-    if len(msg_daily) > 1:
-        body += "\n".join(msg_daily)
-    if len(msg_weekly) > 1:
-        body += "\n" + "\n".join(msg_weekly)
+    # ✅ 메시지 조합
+    msg = header
+    if has_daily:
+        msg += "\n📅 Daily\n" + daily_msg
+    if has_weekly:
+        msg += "\n🗓 Weekly\n" + weekly_msg
+    if not (has_daily or has_weekly):
+        msg += "감지된 종목 없음\n"
 
-    if not body.strip():
-        return header + "이번 스캔에서는 감지된 종목이 없습니다."
+    # ✅ Telegram 최대 길이 보호
+    if len(msg) > 3800:
+        msg = msg[:3700] + "\n…(내용 축약)"
 
-    return header + body
+    return msg
+
 
 # =========================
 # 앱 최초 실행 시에만 전체 스캔 & 전송
