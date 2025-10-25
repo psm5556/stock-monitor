@@ -29,107 +29,63 @@ available_tickers = [
 ]
 
 
-# ---------------------------
-# ✅ 데이터 로딩 함수
-# ---------------------------
-@st.cache_data(ttl=3600)
-def load_stock_data(symbol="AAPL", period="1y"):
-    try:
-        df = yf.download(symbol, period=period, interval="1d", auto_adjust=True, progress=False)
-        if df.empty:
-            return pd.DataFrame()
-        return df
-    except:
-        return pd.DataFrame()
+@st.cache_data
+def load_price(symbol, interval="1d"):
+    ticker = yf.Ticker(symbol)
+    df = ticker.history(period="5y", interval=interval)
+    if df.empty: return df
+    df["MA200"] = df["Close"].rolling(200).mean()
+    df["MA240"] = df["Close"].rolling(240).mean()
+    df["MA365"] = df["Close"].rolling(365).mean()
+    return df.dropna()
 
-# ✅ 기업명 자동 로딩
-@st.cache_data(ttl=86400)
-def get_company_name(symbol):
-    try:
-        info = yf.Ticker(symbol).info
-        return info.get("longName", info.get("shortName", symbol))
-    except:
-        return symbol
+st.title("📈 이동평균 감시 대시보드")
 
-# ✅ 이동평균 계산
-def add_mas(df):
-    for w in [200, 240, 365]:
-        df[f"MA{w}"] = df["Close"].rolling(window=w).mean()
-    return df
+# 선택 + 직접입력 모두 지원
+ticker_selected = st.selectbox("티커 선택", options=available_tickers)
+ticker_input = st.text_input("직접 티커 입력", value=ticker_selected).upper()
+symbol = ticker_input if ticker_input else ticker_selected
 
-# ✅ 교차 감지
-def detect_cross(df):
-    result = {}
-    for w in [200, 240, 365]:
-        now = df["Close"].iloc[-1]
-        prev = df["Close"].iloc[-2]
-        ma_now = df[f"MA{w}"].iloc[-1]
-        ma_prev = df[f"MA{w}"].iloc[-2]
+interval = st.radio("차트 간격", ["1d (일봉)", "1wk (주봉)"])
+interval = "1d" if "1d" in interval else "1wk"
 
-        if prev < ma_prev and now > ma_now:
-            result[w] = "골든크로스 ✅"
-        elif prev > ma_prev and now < ma_now:
-            result[w] = "데드크로스 ⚠️"
-        else:
-            result[w] = "교차 없음"
-    return result
+df = load_price(symbol, interval)
 
-# ✅ Plotly 차트 (동적 축)
-def draw_chart(df, title):
-    cols = ["Close", "MA200", "MA240", "MA365"]
-    cols = [c for c in cols if c in df.columns]
-    min_v = df[cols].min().min()
-    max_v = df[cols].max().max()
-    margin = (max_v - min_v) * 0.05
+if df.empty:
+    st.error("데이터 조회 실패")
+    st.stop()
 
-    fig = go.Figure()
-    for c in cols:
-        fig.add_trace(go.Scatter(x=df.index, y=df[c], mode="lines", name=c))
+# 차트 생성
+fig = go.Figure()
 
-    fig.update_layout(
-        title=title,
-        yaxis=dict(range=[min_v - margin, max_v + margin]),
-        height=500,
-        showlegend=True
-    )
-    st.plotly_chart(fig, use_container_width=True)
+fig.add_trace(go.Candlestick(
+    x=df.index,
+    open=df["Open"],
+    high=df["High"],
+    low=df["Low"],
+    close=df["Close"],
+    name="Price"
+))
 
+for ma, color in [("MA200","blue"),("MA240","orange"),("MA365","green")]:
+    fig.add_trace(go.Scatter(
+        x=df.index,
+        y=df[ma],
+        mode="lines",
+        name=ma,
+        line=dict(color=color, width=1.8)
+    ))
 
-# ==================================================
-# ✅ UI 구성
-# ==================================================
-st.title("📈 200/240/365 이동평균 감시 시스템")
+# y축 자동 스케일
+fig.update_yaxes(
+    autorange=True,
+    range=[df["Low"].min()*0.98, df["High"].max()*1.02]
+)
 
-# ✅ 리스트 + 직접 입력 모두 가능
-col1, col2 = st.columns([2, 1])
-with col1:
-    selected_ticker = st.selectbox("📊 티커 선택", available_tickers)
-with col2:
-    input_ticker = st.text_input("직접 입력 (선택보다 우선 적용)", "")
+fig.update_layout(height=650, xaxis_rangeslider_visible=False)
 
-symbol = input_ticker.upper().strip() if input_ticker else selected_ticker
-period = st.selectbox("📅 조회 기간", ["6mo", "1y", "2y", "5y"], index=1)
-
-if st.button("🔍 조회"):
-    with st.spinner("데이터 로딩 중..."):
-        df = load_stock_data(symbol, period)
-
-    if df.empty:
-        st.error("📌 데이터 없음. 티커를 확인해주세요.")
-        st.stop()
-
-    df = add_mas(df)
-    company = get_company_name(symbol)
-    status = detect_cross(df)
-
-    st.subheader(f"📌 분석 결과: {company} ({symbol})")
-    
-    col_a, col_b, col_c = st.columns(3)
-    col_a.metric("200일선", status[200])
-    col_b.metric("240일선", status[240])
-    col_c.metric("365일선", status[365])
-
-    st.subheader("📈 차트")
+st.plotly_chart(fig, use_container_width=True)
+st.success("✅ 데이터 정상 로드")
     draw_chart(df, f"{company} ({symbol}) 가격 / 이동평균선")
 
 st.info("⚙ Telegram 알림은 monitor.py(자동 감시 스케줄러)에서 동작합니다.")
