@@ -55,6 +55,7 @@ def get_price(symbol, interval="1d"):
             df = ticker.history(period="max", interval=interval)
     except Exception:
         df = ticker.history(period="max", interval=interval)
+    df = df.dropna()
     return df
     if df is None or df.empty:
         return None
