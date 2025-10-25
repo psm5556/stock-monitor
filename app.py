@@ -95,16 +95,28 @@ def detect_ma_touch(df):
 
 
 def detect_symbol(symbol):
-    name = get_company_name(symbol)
-    result = {"symbol":symbol,"name":name,"daily":[],"weekly":[]}
+    # name = get_company_name(symbol)
+    # result = {"symbol":symbol,"name":name,"daily":[],"weekly":[]}
 
-    for itv, key in [("1d","daily"),("1wk","weekly")]:
-        df = get_price(symbol,itv)
+    # for itv, key in [("1d","daily"),("1wk","weekly")]:
+    #     df = get_price(symbol,itv)
         
-        if df is not None and is_downtrend(df):
-            res = detect_ma_touch(df)
-            if res: result[key] = res
-    return result
+    #     if df is not None and is_downtrend(df):
+    #         res = detect_ma_touch(df)
+    #         if res: result[key] = res
+    # return result
+
+    name = get_company_name(symbol)
+    out = {"symbol": symbol, "name": name, "daily": [], "weekly": []}
+
+    for interval, key in [("1d", "daily"), ("1wk", "weekly")]:
+        df = get_price(symbol, interval)
+        if df is not None:
+            touches = detect_ma_touch(df)
+            if touches:
+                out[key] = touches
+
+    return out
 
 
 # ✅ 메시지 4섹션 분리
