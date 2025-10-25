@@ -27,13 +27,28 @@ with col2:
 
 # 일간 데이터
 daily = get_data(selected, "1d")
-st.subheader("📅 일 단위 (Daily) 차트")
-st.line_chart(daily[["Close", "MA200", "MA240", "MA365"]].dropna())
+
+if daily.empty or "Close" not in daily.columns:
+    st.warning("⚠️ 주가 데이터를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.")
+else:
+    st.subheader("📅 일 단위 (Daily) 차트")
+    cols = [c for c in ["Close", "MA200", "MA240", "MA365"] if c in daily.columns]
+    if len(cols) > 1:
+        st.line_chart(daily[cols].dropna())
+    else:
+        st.info("이동평균 데이터를 계산할 수 없습니다.")
 
 # 주간 데이터
 weekly = get_data(selected, "1wk")
-st.subheader("🗓️ 주 단위 (Weekly) 차트")
-st.line_chart(weekly[["Close", "MA200", "MA240", "MA365"]].dropna())
+if weekly.empty or "Close" not in weekly.columns:
+    st.warning("⚠️ 주간 데이터를 불러오지 못했습니다.")
+else:
+    st.subheader("🗓️ 주 단위 (Weekly) 차트")
+    cols = [c for c in ["Close", "MA200", "MA240", "MA365"] if c in weekly.columns]
+    if len(cols) > 1:
+        st.line_chart(weekly[cols].dropna())
+    else:
+        st.info("이동평균 데이터를 계산할 수 없습니다.")
 
 # 교차 감지 함수
 def detect_cross(data):
