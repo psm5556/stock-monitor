@@ -77,15 +77,29 @@ def calc_gap(last_close, ma_value):
 
 
 # ✅ MA Touch 감지
-def detect_ma_touch(df, tol=0.005):
+def detect_ma_touch(df, tolerance=0.005):
     touches = []
     last = df.iloc[-1]
     for p in MA_LIST:
         col = f"MA{p}"
-        if col in df.columns:
-            if abs(last.Close - last[col]) / last[col] <= tol:
-                touches.append(p)
+        if col not in df.columns or pd.isna(last[col]):
+            continue
+
+        close_price = last["Close"]
+        ma_value = last[col]
+        gap = abs(close_price - ma_value) / ma_value
+
+        # ✅ 조건 1: MA 근접(0.5% 이내)
+        is_near = gap <= tolerance
+
+        # ✅ 조건 2: 현재가가 MA 아래에 위치 (더 싸게 매수 기회)
+        is_below = close_price < ma_value
+
+        if is_near or is_below:
+            touches.append(p)
+
     return touches
+
 
 
 # ✅ 감지 수행
