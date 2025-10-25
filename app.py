@@ -90,9 +90,10 @@ fig.update_layout(
     xaxis_rangeslider_visible=False
 )
 
+st.success("✅ 데이터 정상 로드")
+
 st.plotly_chart(fig, use_container_width=True)
 
-st.success("✅ 데이터 정상 로드")
-    draw_chart(df, f"{company} ({symbol}) 가격 / 이동평균선")
+
 
 st.info("⚙ Telegram 알림은 monitor.py(자동 감시 스케줄러)에서 동작합니다.")
