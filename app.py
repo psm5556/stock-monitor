@@ -79,36 +79,35 @@ def build_symbol_map_and_sorted_list(tickers: list[str]) -> tuple[dict, list[str
 # =========================
 @st.cache_data(ttl=3600)
 def get_price(symbol: str, interval: str = "1d") -> pd.DataFrame | None:
-    """
-    yfinance.Ticker(symbol).history()만 사용.
-    interval: "1d" 또는 "1wk"
-    period: 일봉 3y, 주봉 10y (MA365 계산 여유)
-    """
     period = "10y" if interval == "1wk" else "3y"
     try:
-        # df = yf.Ticker(symbol).history(period=period, interval=interval)
-        try:
-            df = yf.Ticker(symbol).history(period=period, interval=interval)
-            if df.empty:
-                # fallback: 전체 데이터
-                df = yf.Ticker(symbol).history(period="max", interval=interval)
-        except Exception:
-            df = yf.Ticker(symbol).history(period="max", interval=interval)
-        return df
+        ticker = yf.Ticker(symbol)
+
+        # 1차 요청
+        df = ticker.history(period=period, interval=interval)
+
+        # empty → 전체로 fallback
+        if df.empty:
+            df = ticker.history(period="max", interval=interval)
+
         if df is None or df.empty:
             return None
+
         df = df[["Open", "High", "Low", "Close", "Volume"]].copy()
-        # 장기 이동평균
+
+        # ✅ ✅ ✅ 장기 이동평균 계산 복구 ✅ ✅ ✅
         for p in MA_LIST:
             df[f"MA{p}"] = df["Close"].rolling(p).mean()
-        # 계산 가능한 구간만 사용
-        df = df.dropna()
-        if df.empty:
-            return None
-        return df
+
+        # 계산 가능한 구간만
+        df.dropna(inplace=True)
+
+        return df if not df.empty else None
+
     except Exception as e:
         print(f"[{symbol}][{interval}] get_price error:", str(e))
         return None
+
 
 # =========================
 # 장기 하락 중 MA '접근/터치' 감지
