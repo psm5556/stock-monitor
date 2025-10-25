@@ -65,10 +65,24 @@ def get_price(symbol, interval="1d"):
     return df if not df.empty else None
 
 
+# def is_downtrend(df, lookback=20):
+#     if len(df) < lookback + 1:
+#         return False
+#     return (df["Close"].iloc[-1] - df["Close"].iloc[-lookback]) < 0
+
 def is_downtrend(df, lookback=20):
-    if len(df) < lookback + 1:
+    ma_col = f"MA{lookback}"
+    
+    # MA20 계산이 안 되어 있을 수 있으므로 방어 처리
+    if ma_col not in df.columns or len(df) < lookback * 2:
         return False
-    return (df["Close"].iloc[-1] - df["Close"].iloc[-lookback]) < 0
+
+    # 현재 MA20과 20영업일 전 MA20 비교
+    current_ma = df[ma_col].iloc[-1]
+    past_ma = df[ma_col].iloc[-lookback]
+
+    # 하락 추세 여부 판단
+    return current_ma < past_ma
 
 
 # ✅ 근접/하향이탈 중복 감지 허용
