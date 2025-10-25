@@ -5,10 +5,6 @@ import numpy as np
 import yfinance as yf
 import plotly.graph_objects as go
 
-# ✅ 환경변수 기반 Telegram 설정(앱에서는 알림 미사용)
-BOT_TOKEN = os.environ.get('BOT_TOKEN', '8457877356:AAEam56w8yHqX-ymfGArr3BXAlhmjJB2pDA')
-CHAT_ID = os.environ.get('CHAT_ID', '5877958037')
-
 st.set_page_config(page_title="📈 이동평균 감시", page_icon="📈")
 
 # ✅ 제공된 전체 티커 적용
