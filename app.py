@@ -89,17 +89,50 @@ selected = st.selectbox("📊 종목 선택", TICKERS)
 daily_sel = get_data(selected, "1d")
 weekly_sel = get_data(selected, "1wk")
 
-def plot_chart(df, title):
-    if df.empty: 
-        st.warning("데이터가 없습니다.")
+import plotly.graph_objects as go
+
+def draw_chart(df, title):
+    if df.empty:
+        st.warning("데이터 없음")
         return
+
     cols = ["Close", "MA200", "MA240", "MA365"]
     cols = [c for c in cols if c in df.columns]
-    st.line_chart(df[cols])
-    st.subheader(title)
+    if not cols:
+        st.warning("표시할 데이터 없음")
+        return
+
+    # ✅ y축 범위 자동 설정: min-max 여유를 2~5% 확보
+    min_val = df[cols].min().min()
+    max_val = df[cols].max().max()
+    margin = (max_val - min_val) * 0.05
+    y_min, y_max = min_val - margin, max_val + margin
+
+    fig = go.Figure()
+
+    for c in cols:
+        fig.add_trace(go.Scatter(
+            x=df.index,
+            y=df[c],
+            mode="lines",
+            name=c,
+            line=dict(width=2)
+        ))
+
+    fig.update_layout(
+        title=title,
+        xaxis_title="날짜",
+        yaxis_title="가격",
+        height=450,
+        yaxis=dict(range=[y_min, y_max]),
+        margin=dict(l=40, r=40, t=50, b=40),
+        showlegend=True
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
 
 
-plot_chart(daily_sel, "📅 Daily Chart")
-plot_chart(weekly_sel, "🗓️ Weekly Chart")
+draw_chart(daily_sel, "📅 Daily Chart")
+draw_chart(weekly_sel, "🗓️ Weekly Chart")
 
 st.caption(f"🕒 마지막 업데이트: {dt.datetime.now():%Y-%m-%d %H:%M:%S}")
