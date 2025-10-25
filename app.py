@@ -13,7 +13,7 @@ BOT_TOKEN = os.environ.get('BOT_TOKEN')
 CHAT_ID = os.environ.get('CHAT_ID')
 
 MA_LIST = [200, 240, 365]
-TOLERANCE = 0.01  # ✅ 근접 임계값 ±1%
+TOLERANCE = 0.05  # ✅ 근접 임계값 ±5%
 
 st.set_page_config(page_title="📈 장기 MA 접근 모니터", layout="wide")
 st.title("📈 장기(200/240/365) 이동평균선 접근 모니터 — 일봉 & 주봉")
@@ -75,7 +75,7 @@ def detect_ma_touch(df):
         gap = (close - ma) / ma * 100
 
         # 근접 조건
-        if abs(gap) * 100 <= TOLERANCE:
+        if abs(gap) <= TOLERANCE:
             touches.append((p, round(gap*100,2), "근접"))
 
         # 하향이탈 조건 (근접과 중복 허용)
