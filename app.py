@@ -16,7 +16,7 @@ def get_data(ticker, interval="1d"):
     """안정적인 Yahoo Finance 데이터 수집"""
     try:
         ticker_obj = yf.Ticker(ticker)
-        df = ticker_obj.history(period="5y", interval=interval, auto_adjust=True)
+        df = ticker_obj.history(period="10y", interval=interval, auto_adjust=True)
 
         # ✅ MultiIndex 컬럼 방지
         if isinstance(df.columns, pd.MultiIndex):
