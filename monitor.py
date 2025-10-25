@@ -45,7 +45,15 @@ def get_company_name(symbol):
 def get_price(symbol, interval="1d"):
     period = "10y" if interval == "1wk" else "3y"
     try:
-        df = yf.Ticker(symbol).history(period=period, interval=interval)
+        # df = yf.Ticker(symbol).history(period=period, interval=interval)
+        try:
+            df = yf.Ticker(symbol).history(period=period, interval=interval)
+            if df.empty:
+                # fallback: 전체 데이터
+                df = yf.Ticker(symbol).history(period="max", interval=interval)
+        except Exception:
+            df = yf.Ticker(symbol).history(period="max", interval=interval)
+        return df
         if df is None or df.empty:
             return None
         df = df[["Open","High","Low","Close","Volume"]].copy()
