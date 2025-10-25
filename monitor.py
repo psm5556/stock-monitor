@@ -15,7 +15,7 @@ CHAT_ID = os.environ.get("CHAT_ID")
 # 감지 기본 설정
 # =========================
 MA_LIST = [200, 240, 365]
-TOLERANCE = 0.01  # ✅ 근접 임계값 ±1%
+TOLERANCE = 0.05  # ✅ 근접 임계값 ±1%
 
 TICKERS = [
     "AAPL","ABCL","ACHR","AEP","AES","ALAB","AMD","AMZN","ANET","ARQQ","ARRY","ASML",
@@ -71,7 +71,7 @@ def detect_ma_touch(df):
         gap = (close - ma) / ma
 
         # 근접 감지
-        if abs(gap) * 100 <= TOLERANCE:
+        if abs(gap) <= TOLERANCE:
             touches.append((p, round(gap*100,2), "근접"))
 
         # 하향이탈 감지 (근접과 중복 허용)
