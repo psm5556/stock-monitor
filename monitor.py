@@ -60,10 +60,24 @@ def get_price(symbol, interval="1d"):
     return df if not df.empty else None
 
 
+# def is_downtrend(df, lookback=20):
+#     if len(df) < lookback + 1:
+#         return False
+#     return (df["Close"].iloc[-1] - df["Close"].iloc[-lookback]) < 0
+
 def is_downtrend(df, lookback=20):
     if len(df) < lookback + 1:
         return False
-    return (df["Close"].iloc[-1] - df["Close"].iloc[-lookback]) < 0
+    
+    # 20일 이동평균선 계산
+    ma20 = df["Close"].rolling(lookback).mean()
+    
+    # 최근 MA20 값과 lookback일 전 MA20 값 비교
+    if pd.isna(ma20.iloc[-1]) or pd.isna(ma20.iloc[-lookback]):
+        return False
+    
+    # MA20의 기울기가 음수면 하락 추세
+    return ma20.iloc[-1] < ma20.iloc[-lookback]
 
 
 # ✅ 근접 + 하향이탈 중복 감지 허용
@@ -89,34 +103,15 @@ def detect_ma_touch(df):
     return touches
 
 
-# def detect_symbol(symbol):
-#     name = get_company_name(symbol)
-#     result = {"symbol":symbol,"name":name,"daily":[],"weekly":[]}
-
-#     for itv, key in [("1d","daily"),("1wk","weekly")]:
-#         df = get_price(symbol,itv)
-#         if df is not None and is_downtrend(df):
-#             res = detect_ma_touch(df)
-#             if res: result[key] = res
-
-#     return result
-
 def detect_symbol(symbol):
     name = get_company_name(symbol)
     result = {"symbol":symbol,"name":name,"daily":[],"weekly":[]}
 
     for itv, key in [("1d","daily"),("1wk","weekly")]:
-
         df = get_price(symbol,itv)
-        if df is None or len(df) < max(MA_LIST) + 1:
-            continue
-
-        # ❌ 기존: is_downtrend(df) 필터 → 누락 발생
-        # ✅ 모든 경우 감지
-        res = detect_ma_touch(df)
-
-        if res:
-            result[key] = res
+        if df is not None and is_downtrend(df):
+            res = detect_ma_touch(df)
+            if res: result[key] = res
 
     return result
 
