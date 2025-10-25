@@ -151,7 +151,24 @@ if "scan_done" not in st.session_state:
 
 
 st.subheader("스캔 요약")
-st.dataframe(pd.DataFrame(st.session_state["scan_res"]), use_container_width=True)
+
+summary_rows = []
+for r in st.session_state["scan_res"]:
+    daily_str = ", ".join([f"MA{p} {status}({gap:+.2f}%)"
+                           for (p, gap, status) in r["daily"]]) if r["daily"] else ""
+    weekly_str = ", ".join([f"MA{p} {status}({gap:+.2f}%)"
+                            for (p, gap, status) in r["weekly"]]) if r["weekly"] else ""
+    
+    summary_rows.append({
+        "Symbol": r["symbol"],
+        "Company": r["name"],
+        "Daily": daily_str,
+        "Weekly": weekly_str
+    })
+
+df_summary = pd.DataFrame(summary_rows)
+st.dataframe(df_summary, use_container_width=True)
+
 
 st.subheader("📊 선택 종목 차트")
 import plotly.graph_objects as go
