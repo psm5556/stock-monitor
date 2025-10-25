@@ -132,21 +132,27 @@ def is_downtrend(df: pd.DataFrame, lookback: int = 20) -> bool:
     )
     return (close_slope < 0) or (ma200_slope < 0)
 
-def detect_ma_touch(df: pd.DataFrame, tolerance: float = 0.005) -> list[int]:
-    """
-    현재가가 각 MA 대비 허용오차(tolerance, 예: 0.5%) 이내면 '접근/터치'
-    """
+def detect_ma_touch(df, tolerance=0.005):
     touches = []
-    if df is None or df.empty:
-        return touches
     last = df.iloc[-1]
     for p in MA_LIST:
         col = f"MA{p}"
         if col not in df.columns or pd.isna(last[col]):
             continue
-        gap = abs(last["Close"] - last[col]) / last[col]
-        if gap <= tolerance:
+
+        close_price = last["Close"]
+        ma_value = last[col]
+        gap = abs(close_price - ma_value) / ma_value
+
+        # ✅ 조건 1: MA 근접(0.5% 이내)
+        is_near = gap <= tolerance
+
+        # ✅ 조건 2: 현재가가 MA 아래에 위치 (더 싸게 매수 기회)
+        is_below = close_price < ma_value
+
+        if is_near or is_below:
             touches.append(p)
+
     return touches
 
 def detect_signals_for_symbol(symbol: str) -> dict:
