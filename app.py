@@ -180,6 +180,13 @@ if df_chart is None:
     st.error("데이터 부족")
 else:
     fig = go.Figure()
+    
+    # ✅ Box Zoom 적용
+    fig.update_layout(
+        dragmode="zoom",                # 박스 드래그 확대
+        xaxis_rangeslider_visible=False # 하단 미니 차트 제거 (선택)
+    )
+    
     fig.add_trace(go.Candlestick(
         x=df_chart.index, open=df_chart["Open"], high=df_chart["High"],
         low=df_chart["Low"], close=df_chart["Close"]
