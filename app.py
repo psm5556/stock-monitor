@@ -5,70 +5,111 @@ import yfinance as yf
 import plotly.graph_objs as go
 from datetime import datetime
 
-# ✅ 환경변수 (GitHub Actions / Streamlit Secrets)
-BOT_TOKEN = os.environ.get('BOT_TOKEN', '8457877356:AAEam56w8yHqX-ymfGArr3BXAlhmjJB2pDA')
-CHAT_ID = os.environ.get('CHAT_ID', '5877958037')
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
+CHAT_ID = os.environ.get("CHAT_ID", "")
 
-# ✅ Streamlit 설정
-st.set_page_config(page_title="📈 이동평균선 교차 모니터링", layout="wide")
-st.title("📈 이동평균선 교차 모니터링 대시보드")
+st.set_page_config(page_title="📈 MA Cross Monitor", layout="wide")
+st.title("📈 이동평균선 교차 모니터링 시스템")
 
-# ✅ 사용자 설정
-available_tickers = [
-    "AAPL", "MSFT", "NVDA", "TSLA", "GOOGL", "AMZN", "AMD", "JPM", "V", "PLTR",
-    "IONQ", "RGTI", "NTLA", "QUBT", "RKLB", "VRT", "COST", "META", "IBM",
-]
+# ✅ 분석 대상 종목 리스트
+tickers = [
+    "AAPL", "ABB", "ABCL", "ACHR", "AEP",
+    "AES", "ALAB", "AMD", "AMZN", "ANET", "ARQQ", "ARRY", "ASML", "ASTS", "AVGO",
+    "BA", "BAC", "BE", "BEP", "BLK", "BMNR", "BP", "BTQ", "BWXT", "C", "CARR",
+    "CDNS", "CEG", "CFR.SW", "CGON", "CLPT", "COIN", "CONE", "CONL", "COP", "COST",
+    "CRCL", "CRDO", "CRM", "CRSP", "CSCO", "CVX", "D", "DELL", "DNA", "DUK", "ED",
+    "EMR", "ENPH", "ENR", "EOSE", "EQIX", "ETN", "EXC", "FLNC", "FSLR", "GEV", "GLD",
+    "GOOGL", "GS", "HOOD", "HSBC", "HUBB", "IBM", "INTC", "IONQ", "JCI", "JOBY", "JPM",
+    "KO", "LAES", "LMT", "LRCX", "LVMUY", "MA", "MPC", "MSFT", "MSTR", "NEE", "NGG",
+    "NOC", "NRG", "NRGV", "NTLA", "NTRA", "NVDA", "OKLO", "ON", "ORCL", "OXY", "PCG",
+    "PG", "PLTR", "PLUG", "PSTG", "PYPL", "QBTS", "QS", "QUBT", "QURE", "RGTI", "RKLB",
+    "ROK", "SBGSY", "SEDG", "SHEL", "SIEGY", "SLDP", "SMR", "SNPS", "SO", "SOFI",
+    "SPCE", "SPWR", "SQ", "SRE", "STEM", "TLT", "TMO", "TSLA", "TSM", "TWST", "UBT",
+    "UNH", "V", "VLO", "VRT", "VST", "WMT", "HON", "TXG", "XOM", "ZPTA"
+] 
 
+@st.cache_data
+def get_company_names(tickers):
+    data = []
+    for t in tickers:
+        info = yf.Ticker(t).info
+        name = info.get("longName", info.get("shortName", t))
+        data.append((t, name))
+    df = pd.DataFrame(data, columns=["Symbol","Name"])
+    return df.sort_values("Name")  # ✅ 기업명 기준 정렬
+
+company_df = get_company_names(tickers)
+
+# ✅ Sidebar — 선택 UI
 st.sidebar.subheader("🔍 종목 선택")
-selected_ticker = st.sidebar.selectbox("Select from list", available_tickers)
+options = {f"{row['Name']} ({row['Symbol']})": row['Symbol'] for _, row in company_df.iterrows()}
+selected_key = st.sidebar.selectbox("Select Company", list(options.keys()))
+selected_symbol = options[selected_key]
 
-custom_ticker = st.sidebar.text_input("또는 직접 입력", "")
-
-symbol = custom_ticker.strip().upper() if custom_ticker else selected_ticker
-
-interval = st.sidebar.radio("Interval", ["1d", "1wk"], index=0)
+interval = st.sidebar.radio("차트 주기", ["일봉 (1d)", "주봉 (1wk)"])
+interval_map = {"일봉 (1d)": "1d", "주봉 (1wk)": "1wk"}
+selected_interval = interval_map[interval]
 
 
-# ✅ 데이터 조회 함수 (주봉은 10년 확장)
-def get_price(symbol, interval):
+# ✅ 주가 + MA 계산
+def load_data(symbol, interval):
     period = "3y" if interval == "1d" else "10y"
-
     df = yf.Ticker(symbol).history(period=period, interval=interval)
 
-    if df.empty:
-        return df
+    if df.empty: return df
 
-    df["MA200"] = df["Close"].rolling(200).mean()
-    df["MA240"] = df["Close"].rolling(240).mean()
-    df["MA365"] = df["Close"].rolling(365).mean()
+    for p in [200,240,365]:
+        df[f"MA{p}"] = df["Close"].rolling(p).mean()
 
     return df.dropna()
 
 
-# ✅ 이동평균 교차 감지 함수
+# ✅ 교차 감지 함수
 def detect_cross(df):
-    crosses = []
-    for ma in ["MA200", "MA240", "MA365"]:
+    result = []
+    for p in [200,240,365]:
+        ma = f"MA{p}"
         if df["Close"].iloc[-2] < df[ma].iloc[-2] and df["Close"].iloc[-1] >= df[ma].iloc[-1]:
-            crosses.append((ma, "상향"))
+            result.append((ma, "상향"))
         if df["Close"].iloc[-2] > df[ma].iloc[-2] and df["Close"].iloc[-1] <= df[ma].iloc[-1]:
-            crosses.append((ma, "하향"))
-    return crosses
+            result.append((ma, "하향"))
+    return result
 
 
 # ✅ Telegram 전송
-def send_telegram(message):
-    if not BOT_TOKEN or not CHAT_ID:
-        return
+def send_telegram(text):
+    if not BOT_TOKEN or not CHAT_ID: return
     import requests
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    requests.post(url, json={"chat_id": CHAT_ID, "text": message})
+    requests.post(url, json={"chat_id": CHAT_ID, "text": text})
 
 
-# ✅ 차트 표시 함수
-def plot_chart(df, symbol):
-    info = yf.Ticker(symbol).info
-    company = info.get("longName", symbol)
+# ✅ 전체 종목 교차 검사 + 알림
+cross_alerts = []
+for _, row in company_df.iterrows():
+    sym = row["Symbol"]
+    df = load_data(sym, selected_interval)
+    if df.empty: continue
+    crosses = detect_cross(df)
+    if crosses:
+        msg = f"🚨 {row['Name']} ({sym})\n" + "\n".join([f"{ma} {d}" for ma,d in crosses])
+        cross_alerts.append(msg)
+
+if cross_alerts:
+    for alert in cross_alerts:
+        st.error(alert)
+        send_telegram(alert)
+else:
+    st.success("✅ 전체 종목에 최근 이동평균선 교차 없음")
+
+
+# ✅ 선택한 종목 차트만 표시
+df = load_data(selected_symbol, selected_interval)
+
+if df.empty:
+    st.error("⚠ 데이터 조회 실패")
+else:
+    company = yf.Ticker(selected_symbol).info.get("longName", selected_symbol)
 
     fig = go.Figure()
 
@@ -77,10 +118,10 @@ def plot_chart(df, symbol):
         name="Price"
     ))
 
-    for ma, color in zip(["MA200","MA240","MA365"], ["blue","orange","green"]):
+    for ma,color in zip(["MA200","MA240","MA365"],["blue","orange","green"]):
         fig.add_trace(go.Scatter(
             x=df.index, y=df[ma], mode="lines",
-            name=ma, line=dict(color=color, width=1.5)
+            name=ma, line=dict(color=color,width=1.8)
         ))
 
     fig.update_yaxes(
@@ -89,30 +130,10 @@ def plot_chart(df, symbol):
     )
 
     fig.update_layout(
-        title=f"{company} ({symbol}) {interval.upper()} Chart",
-        xaxis_rangeslider_visible=False,
-        height=650,
+        title=f"{company} ({selected_symbol}) — {selected_interval}",
+        height=650, xaxis_rangeslider_visible=False,
         showlegend=True
     )
-
     st.plotly_chart(fig, use_container_width=True)
 
-
-# ✅ 실행
-df = get_price(symbol, interval)
-
-if df.empty:
-    st.error("⚠️ 데이터 조회 실패")
-else:
-    plot_chart(df, symbol)
-
-    crosses = detect_cross(df)
-
-    if crosses:
-        msg = f"🚨 교차 발생: {symbol}\n" + "\n".join([f"{ma} - {dir}" for ma,dir in crosses])
-        st.error(msg)
-        send_telegram(msg)
-    else:
-        st.success("✅ 최근 교차 없음")
-
-    st.caption(f"업데이트: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+st.caption(f"⏱ 업데이트: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
