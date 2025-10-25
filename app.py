@@ -16,8 +16,11 @@ st.set_page_config(page_title="📈 MA 터치 기반 분할매수 모니터", la
 st.title("📈 장기 이동평균(MA200/240/365) 터치 기반 분할매수 모니터 (일봉·주봉)")
 
 # 환경변수에서 토큰/챗아이디 로드 (사용자 요청값을 기본값으로 유지)
-BOT_TOKEN = os.environ.get('BOT_TOKEN', '8457877356:AAEam56w8yHqX-ymfGArr3BXAlhmjJB2pDA')
-CHAT_ID = os.environ.get('CHAT_ID', '5877958037')
+# BOT_TOKEN = os.environ.get('BOT_TOKEN', '8457877356:AAEam56w8yHqX-ymfGArr3BXAlhmjJB2pDA')
+# CHAT_ID = os.environ.get('CHAT_ID', '5877958037')
+
+BOT_TOKEN = os.environ.get('BOT_TOKEN')
+CHAT_ID = os.environ.get('CHAT_ID')
 
 # 감시 대상 티커(요청된 목록)
 available_tickers = [
