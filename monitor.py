@@ -114,7 +114,7 @@ def send_telegram(msg):
 # ✅ 메시지 구성 (app.py 개선 기반)
 KST = pytz.timezone("Asia/Seoul")
 timestamp = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
-header = f"📬 장기 MA 접근 감지 ({timestamp})\n"
+header = f"📬 [자동] 장기 MA 접근 감지 ({timestamp})\n"
 
 daily_msg = "\n📅 Daily\n"
 weekly_msg = "\n🗓 Weekly\n"
