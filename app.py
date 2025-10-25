@@ -1,95 +1,118 @@
 import os
 import streamlit as st
 import pandas as pd
-import numpy as np
 import yfinance as yf
-import plotly.graph_objects as go
+import plotly.graph_objs as go
+from datetime import datetime
 
-st.set_page_config(page_title="📈 이동평균 감시", page_icon="📈")
+# ✅ 환경변수 (GitHub Actions / Streamlit Secrets)
+BOT_TOKEN = os.environ.get('BOT_TOKEN', '8457877356:AAEam56w8yHqX-ymfGArr3BXAlhmjJB2pDA')
+CHAT_ID = os.environ.get('CHAT_ID', '5877958037')
 
-# ✅ 제공된 전체 티커 적용
+# ✅ Streamlit 설정
+st.set_page_config(page_title="📈 이동평균선 교차 모니터링", layout="wide")
+st.title("📈 이동평균선 교차 모니터링 대시보드")
+
+# ✅ 사용자 설정
 available_tickers = [
-    "AAPL", "ABB", "ABCL", "ACHR", "AEP",
-    "AES", "ALAB", "AMD", "AMZN", "ANET", "ARQQ", "ARRY", "ASML", "ASTS", "AVGO",
-    "BA", "BAC", "BE", "BEP", "BLK", "BMNR", "BP", "BTQ", "BWXT", "C", "CARR",
-    "CDNS", "CEG", "CFR.SW", "CGON", "CLPT", "COIN", "CONE", "CONL", "COP", "COST",
-    "CRCL", "CRDO", "CRM", "CRSP", "CSCO", "CVX", "D", "DELL", "DNA", "DUK", "ED",
-    "EMR", "ENPH", "ENR", "EOSE", "EQIX", "ETN", "EXC", "FLNC", "FSLR", "GEV", "GLD",
-    "GOOGL", "GS", "HOOD", "HSBC", "HUBB", "IBM", "INTC", "IONQ", "JCI", "JOBY", "JPM",
-    "KO", "LAES", "LMT", "LRCX", "LVMUY", "MA", "MPC", "MSFT", "MSTR", "NEE", "NGG",
-    "NOC", "NRG", "NRGV", "NTLA", "NTRA", "NVDA", "OKLO", "ON", "ORCL", "OXY", "PCG",
-    "PG", "PLTR", "PLUG", "PSTG", "PYPL", "QBTS", "QS", "QUBT", "QURE", "RGTI", "RKLB",
-    "ROK", "SBGSY", "SEDG", "SHEL", "SIEGY", "SLDP", "SMR", "SNPS", "SO", "SOFI",
-    "SPCE", "SPWR", "SQ", "SRE", "STEM", "TLT", "TMO", "TSLA", "TSM", "TWST", "UBT",
-    "UNH", "V", "VLO", "VRT", "VST", "WMT", "HON", "TXG", "XOM", "ZPTA"
+    "AAPL", "MSFT", "NVDA", "TSLA", "GOOGL", "AMZN", "AMD", "JPM", "V", "PLTR",
+    "IONQ", "RGTI", "NTLA", "QUBT", "RKLB", "VRT", "COST", "META", "IBM",
 ]
 
+st.sidebar.subheader("🔍 종목 선택")
+selected_ticker = st.sidebar.selectbox("Select from list", available_tickers)
 
-@st.cache_data
-def load_price(symbol, interval="1d"):
-    ticker = yf.Ticker(symbol)
-    df = ticker.history(period="5y", interval=interval)
-    if df.empty: return df
+custom_ticker = st.sidebar.text_input("또는 직접 입력", "")
+
+symbol = custom_ticker.strip().upper() if custom_ticker else selected_ticker
+
+interval = st.sidebar.radio("Interval", ["1d", "1wk"], index=0)
+
+
+# ✅ 데이터 조회 함수 (주봉은 10년 확장)
+def get_price(symbol, interval):
+    period = "3y" if interval == "1d" else "10y"
+
+    df = yf.Ticker(symbol).history(period=period, interval=interval)
+
+    if df.empty:
+        return df
+
     df["MA200"] = df["Close"].rolling(200).mean()
     df["MA240"] = df["Close"].rolling(240).mean()
     df["MA365"] = df["Close"].rolling(365).mean()
+
     return df.dropna()
 
-st.title("📈 이동평균 감시 대시보드")
 
-# 선택 + 직접입력 모두 지원
-ticker_selected = st.selectbox("티커 선택", options=available_tickers)
-ticker_input = st.text_input("직접 티커 입력", value=ticker_selected).upper()
-symbol = ticker_input if ticker_input else ticker_selected
+# ✅ 이동평균 교차 감지 함수
+def detect_cross(df):
+    crosses = []
+    for ma in ["MA200", "MA240", "MA365"]:
+        if df["Close"].iloc[-2] < df[ma].iloc[-2] and df["Close"].iloc[-1] >= df[ma].iloc[-1]:
+            crosses.append((ma, "상향"))
+        if df["Close"].iloc[-2] > df[ma].iloc[-2] and df["Close"].iloc[-1] <= df[ma].iloc[-1]:
+            crosses.append((ma, "하향"))
+    return crosses
 
-interval = st.radio("차트 간격", ["1d (일봉)", "1wk (주봉)"])
-interval = "1d" if "1d" in interval else "1wk"
 
-df = load_price(symbol, interval)
+# ✅ Telegram 전송
+def send_telegram(message):
+    if not BOT_TOKEN or not CHAT_ID:
+        return
+    import requests
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+    requests.post(url, json={"chat_id": CHAT_ID, "text": message})
 
-if df.empty:
-    st.error("데이터 조회 실패")
-    st.stop()
 
-# 회사명 가져오기
-company = yf.Ticker(symbol).info.get("longName", symbol)
+# ✅ 차트 표시 함수
+def plot_chart(df, symbol):
+    info = yf.Ticker(symbol).info
+    company = info.get("longName", symbol)
 
-# 차트 생성 및 표시
-fig = go.Figure()
+    fig = go.Figure()
 
-fig.add_trace(go.Candlestick(
-    x=df.index,
-    open=df["Open"],
-    high=df["High"],
-    low=df["Low"],
-    close=df["Close"],
-    name="Price"
-))
-
-for ma, color in [("MA200","blue"),("MA240","orange"),("MA365","green")]:
-    fig.add_trace(go.Scatter(
-        x=df.index,
-        y=df[ma],
-        mode="lines",
-        name=ma,
-        line=dict(color=color, width=1.8)
+    fig.add_trace(go.Candlestick(
+        x=df.index, open=df.Open, high=df.High, low=df.Low, close=df.Close,
+        name="Price"
     ))
 
-fig.update_yaxes(
-    autorange=True,
-    range=[df["Low"].min()*0.98, df["High"].max()*1.02]
-)
+    for ma, color in zip(["MA200","MA240","MA365"], ["blue","orange","green"]):
+        fig.add_trace(go.Scatter(
+            x=df.index, y=df[ma], mode="lines",
+            name=ma, line=dict(color=color, width=1.5)
+        ))
 
-fig.update_layout(
-    title=f"{company} ({symbol})",
-    height=650,
-    xaxis_rangeslider_visible=False
-)
+    fig.update_yaxes(
+        autorange=True,
+        range=[df.Low.min()*0.97, df.High.max()*1.03]
+    )
 
-st.success("✅ 데이터 정상 로드")
+    fig.update_layout(
+        title=f"{company} ({symbol}) {interval.upper()} Chart",
+        xaxis_rangeslider_visible=False,
+        height=650,
+        showlegend=True
+    )
 
-st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True)
 
 
+# ✅ 실행
+df = get_price(symbol, interval)
 
-st.info("⚙ Telegram 알림은 monitor.py(자동 감시 스케줄러)에서 동작합니다.")
+if df.empty:
+    st.error("⚠️ 데이터 조회 실패")
+else:
+    plot_chart(df, symbol)
+
+    crosses = detect_cross(df)
+
+    if crosses:
+        msg = f"🚨 교차 발생: {symbol}\n" + "\n".join([f"{ma} - {dir}" for ma,dir in crosses])
+        st.error(msg)
+        send_telegram(msg)
+    else:
+        st.success("✅ 최근 교차 없음")
+
+    st.caption(f"업데이트: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
