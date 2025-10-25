@@ -9,226 +9,209 @@ import pytz
 from datetime import datetime
 import plotly.graph_objects as go
 
-# =========================
-# 환경 변수
-# =========================
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 CHAT_ID = os.environ.get('CHAT_ID')
 
-# =========================
-# UI 설정
-# =========================
+MA_LIST = [200, 240, 365]
+TOLERANCE = 0.01  # ✅ 근접 임계값 ±1%
+
 st.set_page_config(page_title="📈 장기 MA 접근 모니터", layout="wide")
 st.title("📈 장기(200/240/365) 이동평균선 접근 모니터 — 일봉 & 주봉")
-st.caption("일봉/주봉 기반 장기 MA 접근/하향이탈 감지")
+st.caption("Daily/Weekly - 근접 & 하향이탈 감지 (중복 허용)")
 
-# =========================
-# 모니터링 대상 티커 목록
-# =========================
 available_tickers = [
     "AAPL","ABCL","ACHR","AEP","AES","ALAB","AMD","AMZN","ANET","ARQQ","ARRY","ASML",
     "ASTS","AVGO","BA","BAC","BE","BEP","BLK","BMNR","BP","BTQ","BWXT","C","CARR",
     "CDNS","CEG","CFR.SW","CGON","CLPT","COIN","CONL","COP","COST","CRCL","CRDO",
     "CRM","CRSP","CSCO","CVX","D","DELL","DNA","DUK","ED","EMR","ENPH","ENR","EOSE",
     "EQIX","ETN","EXC","FLNC","FSLR","GEV","GLD","GOOGL","GS","HOOD","HSBC","HUBB",
-    "IBM","INTC","IONQ","JCI","JOBY","JPM","KO","LAES","LMT","LRCX","LVMUY","MA","MPC",
-    "MSFT","MSTR","NEE","NGG","NOC","NRG","NRGV","NTLA","NTRA","NVDA","OKLO","ON",
-    "ORCL","OXY","PCG","PG","PLTR","PLUG","PSTG","PYPL","QBTS","QS","QUBT","QURE",
-    "RGTI","RKLB","ROK","SBGSY","SEDG","SHEL","SIEGY","SLDP","SMR","SNPS","SO","SOFI",
-    "SPCE","SPWR","XYZ","SRE","STEM","TLT","TMO","TSLA","TSM","TWST","UBT","UNH",
-    "V","VLO","VRT","VST","WMT","HON","TXG","XOM","ZPTA"
+    "IBM","INTC","IONQ","JCI","JOBY","JPM","KO","LAES","LMT","LRCX","LVMUY","MA",
+    "MPC","MSFT","MSTR","NEE","NGG","NOC","NRG","NRGV","NTLA","NTRA","NVDA","OKLO",
+    "ON","ORCL","OXY","PCG","PG","PLTR","PLUG","PSTG","PYPL","QBTS","QS","QUBT",
+    "QURE","RGTI","RKLB","ROK","SBGSY","SEDG","SHEL","SIEGY","SLDP","SMR","SNPS",
+    "SO","SOFI","SPCE","SPWR","XYZ","SRE","STEM","TLT","TMO","TSLA","TSM","TWST",
+    "UBT","UNH","V","VLO","VRT","VST","WMT","HON","TXG","XOM","ZPTA"
 ]
-MA_LIST = [200, 240, 365]
 
-# =========================
-# 회사명 가져오기
-# =========================
+
 @st.cache_data(ttl=86400)
-def get_company_name(symbol: str) -> str:
+def get_company_name(symbol):
     try:
         info = yf.Ticker(symbol).info
         return info.get("longName") or info.get("shortName") or symbol
-    except Exception:
+    except:
         return symbol
 
-@st.cache_data(ttl=86400)
-def build_symbol_map_and_sorted_list(tickers):
-    mapping = {sym: get_company_name(sym) for sym in tickers}
-    display_list = sorted([f"{mapping[sym]} ({sym})" for sym in tickers], key=str.lower)
-    return mapping, display_list
 
-# =========================
-# 가격 데이터
-# =========================
 @st.cache_data(ttl=3600)
-def get_price(symbol: str, interval="1d") -> pd.DataFrame | None:
+def get_price(symbol, interval="1d"):
     period = "10y" if interval == "1wk" else "3y"
+    ticker = yf.Ticker(symbol)
     try:
-        ticker = yf.Ticker(symbol)
         df = ticker.history(period=period, interval=interval)
         if df.empty:
             df = ticker.history(period="max", interval=interval)
-        if df.empty:
-            return None
+    except:
+        df = ticker.history(period="max", interval=interval)
 
-        df = df[["Open","High","Low","Close","Volume"]].copy()
-
-        for p in MA_LIST:
-            df[f"MA{p}"] = df["Close"].rolling(p).mean()
-
-        # ✅ 최신 데이터 유지하며 오래된 NaN만 제거
-        valid_min = df.dropna().index.min()
-        if valid_min is not None:
-            df = df[df.index >= valid_min]
-
-        return df if not df.empty else None
-
-    except Exception as e:
-        print(f"[{symbol}][{interval}] error:", e)
+    if df is None or df.empty:
         return None
 
-# =========================
-# 장기 MA 감지
-# =========================
-def detect_ma_touch(df, tolerance=0.005):
+    df = df[["Open", "High", "Low", "Close", "Volume"]].copy()
+    for p in MA_LIST:
+        df[f"MA{p}"] = df["Close"].rolling(p).mean()
+    df.dropna(inplace=True)
+    return df if not df.empty else None
+
+
+# def is_downtrend(df, lookback=20):
+#     if len(df) < lookback + 1:
+#         return False
+#     return (df["Close"].iloc[-1] - df["Close"].iloc[-lookback]) < 0
+
+def is_downtrend(df, lookback=20):
+    if len(df) < lookback + 1:
+        return False
+    
+    # 20일 이동평균선 계산
+    ma20 = df["Close"].rolling(lookback).mean()
+    
+    # 최근 MA20 값과 lookback일 전 MA20 값 비교
+    if pd.isna(ma20.iloc[-1]) or pd.isna(ma20.iloc[-lookback]):
+        return False
+    
+    # MA20의 기울기가 음수면 하락 추세
+    return ma20.iloc[-1] < ma20.iloc[-lookback]
+
+
+# ✅ 근접/하향이탈 중복 감지 허용
+def detect_ma_touch(df):
     touches = []
     last = df.iloc[-1]
-    close = last["Close"]
-
+    
     for p in MA_LIST:
-        col = f"MA{p}"
-        if col not in df.columns or pd.isna(last[col]):
-            continue
+        ma = last[f"MA{p}"]
+        if pd.isna(ma): continue
 
-        ma = last[col]
+        close = last["Close"]
         gap = (close - ma) / ma
-        pct = round(gap * 100, 2)
 
-        if abs(gap) <= tolerance:
-            touches.append((p, pct, "근접"))
+        # 근접 조건
+        if abs(gap) <= TOLERANCE:
+            touches.append((p, round(gap*100,2), "근접"))
 
+        # 하향이탈 조건 (근접과 중복 허용)
         if close < ma:
-            touches.append((p, pct, "하향이탈"))
+            touches.append((p, round(gap*100,2), "하향이탈"))
 
     return touches
 
 
-def detect_signals_for_symbol(symbol: str) -> dict:
+def detect_symbol(symbol):
     name = get_company_name(symbol)
-    out = {"symbol": symbol, "name": name, "daily": [], "weekly": []}
+    result = {"symbol":symbol,"name":name,"daily":[],"weekly":[]}
 
-    for interval, key in [("1d", "daily"), ("1wk", "weekly")]:
-        df = get_price(symbol, interval)
-        if df is not None:
-            touches = detect_ma_touch(df)
-            if touches:
-                out[key] = touches
+    for itv, key in [("1d","daily"),("1wk","weekly")]:
+        df = get_price(symbol,itv)
+        
+        if df is not None and is_downtrend(df):
+            res = detect_ma_touch(df)
+            if res: result[key] = res
+    return result
 
-    return out
 
-# =========================
-# 메시지 구성 + Telegram 전송
-# =========================
-def build_alert_message(results: list[dict]) -> str:
-    KST = pytz.timezone("Asia/Seoul")
-    ts = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
-    msg = f"📬 장기 MA 접근 감지 ({ts})\n"
+# ✅ 메시지 4섹션 분리
+def build_alert_message(results):
+    ts = datetime.now(pytz.timezone("Asia/Seoul")).strftime("%Y-%m-%d %H:%M:%S")
+    msg = f"📬 [수동] MA 접근 감지 ({ts})\n"
 
-    section_added = False
+    sections = [
+        ("📅 Daily — 근접", "daily", "근접"),
+        ("📅 Daily — 하향이탈", "daily", "하향이탈"),
+        ("🗓 Weekly — 근접", "weekly", "근접"),
+        ("🗓 Weekly — 하향이탈", "weekly", "하향이탈"),
+    ]
 
-    for frame, title in [("daily", "📅 Daily"), ("weekly", "🗓 Weekly")]:
-        section = ""
+    any_signal = False
+
+    for title, tf, sk in sections:
+        block = ""
         for r in results:
-            if r[frame]:
-                section += f"\n- {r['name']} ({r['symbol']})\n"
-                for p, gap, status in r[frame]:
-                    emoji = "✅" if status == "근접" else "🔻"
-                    section += f"   {emoji} MA{p} {status} ({gap:+.2f}%)\n"
-        if section:
-            msg += f"\n{title}{section}"
-            section_added = True
+            rows = [(p,g) for (p,g,s) in r[tf] if s == sk]
+            if rows:
+                any_signal = True
+                block += f"- {r['name']} ({r['symbol']})\n"
+                for p,gap in rows:
+                    emoji = "✅" if sk=="근접" else "🔻"
+                    block += f"   {emoji} MA{p} {sk} ({gap:+.2f}%)\n"
+        if block:
+            msg += f"\n{title}\n{block}"
 
-    if not section_added:
+    if not any_signal:
         msg += "\n감지된 종목 없음"
 
-    return msg[:3800]
+    return msg
 
-def send_telegram_message(text: str) -> bool:
-    try:
-        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-        r = requests.post(url, json={"chat_id": CHAT_ID, "text": text})
-        return r.status_code == 200
-    except:
-        return False
 
-# =========================
-# 실행 시 스캔
-# =========================
-with st.spinner("스캔 중… (일봉/주봉)"):
-    results = []
-    for sym in available_tickers:
-        r = detect_signals_for_symbol(sym)
-        if r["daily"] or r["weekly"]:
-            results.append(r)
-    st.session_state["scan_results"] = results
+def send_telegram(msg):
+    if not BOT_TOKEN or not CHAT_ID:
+        return
+    requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+                  json={"chat_id":CHAT_ID,"text":msg})
 
-msg = build_alert_message(results)
-if send_telegram_message(msg):
-    st.success("Telegram 전송 완료 ✅")
-else:
-    st.warning("Telegram 전송 실패 ❌")
+
+# ✅ 최초 1회 자동 전송
+if "scan" not in st.session_state:
+    st.session_state["scan"] = True
+    res = []
+    for s in available_tickers:
+        r = detect_symbol(s)
+        if r["daily"] or r["weekly"]: res.append(r)
+    send_telegram(build_alert_message(res))
+    st.success("✅ Telegram 발송 완료!")
+
 
 # =========================
-# UI: 결과 테이블 + 차트
+# Plot UI 유지
 # =========================
-symbol_map, display_options = build_symbol_map_and_sorted_list(available_tickers)
-
-st.subheader("🔎 감지 결과 요약")
-scan_results = st.session_state["scan_results"]
-
-if scan_results:
-    df_summary = pd.DataFrame([
-        {
-            "Symbol": r["symbol"],
-            "Company": r["name"],
-            "Daily": ", ".join([f"MA{p}" for p,_,_ in r["daily"]]),
-            "Weekly": ", ".join([f"MA{p}" for p,_,_ in r["weekly"]]),
-        }
-        for r in scan_results
-    ])
-    st.dataframe(df_summary, use_container_width=True, hide_index=True)
-else:
-    st.info("감지된 종목 없음")
+symbol_map = {s:get_company_name(s) for s in available_tickers}
+display_list = sorted([f"{symbol_map[s]} ({s})" for s in available_tickers], key=str.lower)
 
 st.sidebar.header("종목 선택")
-sel_display = st.sidebar.selectbox("회사명 검색", display_options)
-typed_symbol = st.sidebar.text_input("직접 입력", "")
+sel_display = st.sidebar.selectbox("목록 선택", display_list)
+typed = st.sidebar.text_input("직접 입력")
 
-if typed_symbol.strip():
-    selected_symbol = typed_symbol.strip().upper()
+if typed.strip():
+    ss = typed.upper()
 else:
-    selected_symbol = sel_display.split("(")[-1].replace(")", "").strip()
+    ss = sel_display.split("(")[-1].replace(")","").strip()
 
-selected_name = get_company_name(selected_symbol)
-chart_interval = st.sidebar.radio("주기", ["1d", "1wk"], format_func=lambda x: "일봉" if x=="1d" else "주봉")
+df_chart = get_price(ss, st.sidebar.radio("차트주기", ["1d","1wk"], index=0))
+name = get_company_name(ss)
 
-st.subheader("📊 차트")
-df_chart = get_price(selected_symbol, chart_interval)
+st.subheader(f"📊 {name} ({ss}) Chart")
+
 if df_chart is None:
     st.error("데이터 부족")
 else:
     fig = go.Figure()
+    
+    # ✅ Box Zoom 적용
+    fig.update_layout(
+        dragmode="zoom",                # 박스 드래그 확대
+        xaxis_rangeslider_visible=False # 하단 미니 차트 제거 (선택)
+    )
+    
     fig.add_trace(go.Candlestick(
-        x=df_chart.index,
-        open=df_chart["Open"], high=df_chart["High"], low=df_chart["Low"], close=df_chart["Close"],
-        name="가격", increasing_line_color="red", decreasing_line_color="blue"
+        x=df_chart.index, open=df_chart["Open"], high=df_chart["High"],
+        low=df_chart["Low"], close=df_chart["Close"]
     ))
     for p,c in zip(MA_LIST,["#7752fe","#f97316","#6b7280"]):
-        col=f"MA{p}"
-        if col in df_chart.columns:
-            fig.add_trace(go.Scatter(x=df_chart.index,y=df_chart[col],mode="lines",
-                                     name=f"MA{p}",line=dict(width=2,color=c)))
-    fig.update_layout(height=560,xaxis=dict(rangeslider=dict(visible=False)))
+        fig.add_trace(go.Scatter(
+            x=df_chart.index, y=df_chart[f"MA{p}"],
+            mode="lines", name=f"MA{p}",
+            line=dict(width=2,color=c)
+        ))
     st.plotly_chart(fig, use_container_width=True)
 
-st.caption(f"업데이트: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+st.caption(f"⏱ 마지막 업데이트: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
