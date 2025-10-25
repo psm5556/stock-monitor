@@ -55,7 +55,10 @@ if df.empty:
     st.error("데이터 조회 실패")
     st.stop()
 
-# 차트 생성
+# 회사명 가져오기
+company = yf.Ticker(symbol).info.get("longName", symbol)
+
+# 차트 생성 및 표시
 fig = go.Figure()
 
 fig.add_trace(go.Candlestick(
@@ -76,15 +79,19 @@ for ma, color in [("MA200","blue"),("MA240","orange"),("MA365","green")]:
         line=dict(color=color, width=1.8)
     ))
 
-# y축 자동 스케일
 fig.update_yaxes(
     autorange=True,
     range=[df["Low"].min()*0.98, df["High"].max()*1.02]
 )
 
-fig.update_layout(height=650, xaxis_rangeslider_visible=False)
+fig.update_layout(
+    title=f"{company} ({symbol})",
+    height=650,
+    xaxis_rangeslider_visible=False
+)
 
 st.plotly_chart(fig, use_container_width=True)
+
 st.success("✅ 데이터 정상 로드")
     draw_chart(df, f"{company} ({symbol}) 가격 / 이동평균선")
 
