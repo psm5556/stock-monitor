@@ -139,9 +139,13 @@ def detect_symbol(symbol):
 
     for itv, key in [("1d","daily"),("1wk","weekly")]:
         df = get_price(symbol,itv)
-        if df is not None and is_downtrend(df):
-            res = detect_ma_touch(df)
-            if res: result[key] = res
+        res = detect_ma_touch(df)
+
+        if res:
+            result[key] = res
+        # if df is not None and is_downtrend(df):
+        #     res = detect_ma_touch(df)
+        #     if res: result[key] = res
     return result
 
 # def detect_symbol(symbol):
