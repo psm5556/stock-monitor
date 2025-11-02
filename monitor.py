@@ -35,7 +35,7 @@ TICKERS = [
     "RKLB","ASTS","JOBY","ACHR","NTLA","CRSP","DNA","TWST","TXG","ABCL",
     "IONQ","QBTS","RGTI","QUBT","ARQQ","LAES","XOM","CVX","VLO","NEE",
     "CEG","BE","PLUG","BLDP","SMR","OKLO","UEC","CCJ","QS","SLDP",
-    "FLNC","TSLA","GEV","VRT","ANET","CRDO","ALAB","AMD","ON","AMZN",
+    "FLNC","TSLA","GEV","VRT","HON","ANET","CRDO","ALAB","AMD","ON","AMZN",
     "MSFT","GOOGL","META","AAPL","EQIX","PLTR","CRM","FIG","PATH","SYM",
     "NBIS","IREN","PANW","CRWD","PG","KO","PEP","WMT","COST","PM",
     "V","MA","PYPL","XYZ","COIN","SOFI","HOOD","CRCL","BLK","JPM",
