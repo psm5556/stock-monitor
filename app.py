@@ -33,18 +33,62 @@ st.caption("Daily/Weekly - 근접 & 하향이탈 감지 (중복 허용)")
 #     "UBT","UNH","V","VLO","VRT","VST","WMT","HON","TXG","XOM","ZPTA"
 # ]
 
-available_tickers = [
-    "RKLB","ASTS","JOBY","ACHR","NTLA","CRSP","DNA","TWST","TXG","ABCL"
-    "IONQ","QBTS","RGTI","QUBT","ARQQ","LAES","XOM","CVX","VLO","NEE"
-    "CEG","BE","PLUG","BLDP","SMR","OKLO","LEU","UEC","CCJ","QS"
-    "SLDP","FLNC","ENS","TSLA","GEV","VRT","HON","ANET","CRDO","ALAB","AMD"
-    "ON","AMZN","MSFT","GOOGL","META","AAPL","EQIX","PLTR","CRM","FIG"
-    "PATH","SYM","NBIS","IREN","PANW","CRWD","PG","KO","PEP","WMT"
-    "COST","PM","V","MA","PYPL","XYZ","COIN","SOFI","HOOD","CRCL"
-    "BLK","JPM","RACE","WSM","UNH","NTRA","QURE","TMO","TEM","HIMS"
-    "ECL","XYL","AWK","DD"
-]
+# available_tickers = [
+#     "RKLB","ASTS","JOBY","ACHR","NTLA","CRSP","DNA","TWST","TXG","ABCL"
+#     "IONQ","QBTS","RGTI","QUBT","ARQQ","LAES","XOM","CVX","VLO","NEE"
+#     "CEG","BE","PLUG","BLDP","SMR","OKLO","LEU","UEC","CCJ","QS"
+#     "SLDP","FLNC","ENS","TSLA","GEV","VRT","HON","ANET","CRDO","ALAB","AMD"
+#     "ON","AMZN","MSFT","GOOGL","META","AAPL","EQIX","PLTR","CRM","FIG"
+#     "PATH","SYM","NBIS","IREN","PANW","CRWD","PG","KO","PEP","WMT"
+#     "COST","PM","V","MA","PYPL","XYZ","COIN","SOFI","HOOD","CRCL"
+#     "BLK","JPM","RACE","WSM","UNH","NTRA","QURE","TMO","TEM","HIMS"
+#     "ECL","XYL","AWK","DD"
+# ]
 
+# ==========================
+# 구글 시트에서 티커 자동 로드
+# ==========================
+@st.cache_data
+def load_available_tickers():
+    import urllib.parse
+
+    SHEET_ID = st.secrets["GOOGLE_SHEET_ID"]      # 예: "1abcdEFGHijkLMNOP"
+    SHEET_NAME = st.secrets["GOOGLE_SHEET_NAME"]  # 예: "포트폴리오"
+
+    sheet_name_encoded = urllib.parse.quote(SHEET_NAME)
+
+    # CSV Export URL
+    csv_url = (
+        f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?"
+        f"tqx=out:csv&sheet={sheet_name_encoded}"
+    )
+
+    # F열(티커, index 5), I열(체크, index 8)만 읽기
+    df = pd.read_csv(
+        csv_url,
+        usecols=[5, 8],              # F열=티커(index 5), I열=체크(index 8)
+        on_bad_lines="skip",
+        engine="python"
+    )
+
+    # 컬럼명 수동 지정
+    df.columns = ["티커", "체크"]
+
+    # 체크된 행만 필터링: TRUE / 1 / Y / ✔ 모두 허용
+    mask = df["체크"].astype(str).str.upper().isin(["TRUE", "1", "Y", "✔"])
+    tickers = (
+        df.loc[mask, "티커"]
+          .dropna()
+          .astype(str)
+          .str.upper()
+          .str.strip()
+          .unique()
+          .tolist()
+    )
+
+    return tickers
+
+available_tickers = load_available_tickers()
 
 @st.cache_data(ttl=86400)
 def get_company_name(symbol):
