@@ -48,7 +48,7 @@ st.caption("Daily/Weekly - 근접 & 하향이탈 감지 (중복 허용)")
 # ==========================
 # 구글 시트에서 티커 자동 로드
 # ==========================
-@st.cache_data
+# @st.cache_data
 def load_available_tickers():
     import urllib.parse
 
