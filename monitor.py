@@ -61,10 +61,10 @@ def load_available_tickers():
         f"tqx=out:csv&sheet={sheet_name_encoded}"
     )
 
-    # F열(티커, index 5), I열(체크, index 8)만 읽기
+    # F열(티커, index 5), J열(체크, index 9)만 읽기
     df = pd.read_csv(
         csv_url,
-        usecols=[5, 8],              # F열=티커(index 5), I열=체크(index 8)
+        usecols=[5, 9],              # F열=티커(index 5), J열=체크(index 9)
         on_bad_lines="skip",
         engine="python"
     )
