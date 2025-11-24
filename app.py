@@ -34,20 +34,20 @@ st.caption("Daily/Weekly - 근접 & 하향이탈 감지 (중복 허용)")
 # ]
 
 # available_tickers = [
-    "RKLB","ASTS","JOBY","ACHR","NTLA","CRSP","DNA","TWST","TXG","ABCL",
-    "RXRX","BEAM","TEM","HIMS","IONQ","QBTS","RGTI","IBM","QUBT","SMR",
-    "OKLO","LEU","CCJ","DNA","TWST","TXG","ABCL","ARQQ","LAES","BTQ",
-    "CLPT","NPCE","WATT","AIRJ","COIN","HOOD","CRCL","XYZ","MSTR","BMNR",
-    "PLTR","CRM","SMCI","APP","DDOG","FIG","PATH","SYM","NBIS","IREN",
-    "CRWV","PLUG","QS","SLDP","BE","FLNC","ENS","EOSE","TSLA","ENPH",
-    "DUK","GEV","NEE","AES","CEG","VST","FSLR","NXT","XOM","CVX",
-    "OXY","VRT","CARR","HON","JCI","ANET","CRDO","ALAB","MRVL","MU",
-    "AMD","INTC","AVGO","TSM","LRCX","ON","SNPS","AMZN","MSFT","GOOGL",
-    "META","AAPL","EQIX","PANW","CRWD","ZS","PG","KO","PEP","WMT",
-    "COST","KMB","PM","UL","V","MA","AXP","PYPL","XYZ","SOFI",
-    "AFRM","BLK","JPM","COF","CB","RACE","WSM","LVMUY","UNH","NTRA",
-    "JNJ","TMO","ABT","ISRG","CVS","BSX","MRK","LLY","XYL","ECL",
-    "AWK","DD"
+    # "RKLB","ASTS","JOBY","ACHR","NTLA","CRSP","DNA","TWST","TXG","ABCL",
+    # "RXRX","BEAM","TEM","HIMS","IONQ","QBTS","RGTI","IBM","QUBT","SMR",
+    # "OKLO","LEU","CCJ","DNA","TWST","TXG","ABCL","ARQQ","LAES","BTQ",
+    # "CLPT","NPCE","WATT","AIRJ","COIN","HOOD","CRCL","XYZ","MSTR","BMNR",
+    # "PLTR","CRM","SMCI","APP","DDOG","FIG","PATH","SYM","NBIS","IREN",
+    # "CRWV","PLUG","QS","SLDP","BE","FLNC","ENS","EOSE","TSLA","ENPH",
+    # "DUK","GEV","NEE","AES","CEG","VST","FSLR","NXT","XOM","CVX",
+    # "OXY","VRT","CARR","HON","JCI","ANET","CRDO","ALAB","MRVL","MU",
+    # "AMD","INTC","AVGO","TSM","LRCX","ON","SNPS","AMZN","MSFT","GOOGL",
+    # "META","AAPL","EQIX","PANW","CRWD","ZS","PG","KO","PEP","WMT",
+    # "COST","KMB","PM","UL","V","MA","AXP","PYPL","XYZ","SOFI",
+    # "AFRM","BLK","JPM","COF","CB","RACE","WSM","LVMUY","UNH","NTRA",
+    # "JNJ","TMO","ABT","ISRG","CVS","BSX","MRK","LLY","XYL","ECL",
+    # "AWK","DD"
 # ]
 
 # ==========================
