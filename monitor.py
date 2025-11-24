@@ -43,8 +43,8 @@ TOLERANCE = 0.01  # ✅ 근접 임계값 ±1%
 def load_available_tickers():
     import urllib.parse
 
-    SHEET_ID = st.secrets["GOOGLE_SHEET_ID"]      # 예: "1abcdEFGHijkLMNOP"
-    SHEET_NAME = st.secrets["GOOGLE_SHEET_NAME"]  # 예: "포트폴리오"
+    SHEET_ID = os.environ.get("GOOGLE_SHEET_ID") #st.secrets["GOOGLE_SHEET_ID"]      # 예: "1abcdEFGHijkLMNOP"
+    SHEET_NAME = os.environ.get("GOOGLE_SHEET_NAME") #st.secrets["GOOGLE_SHEET_NAME"]  # 예: "포트폴리오"
 
     sheet_name_encoded = urllib.parse.quote(SHEET_NAME)
 
