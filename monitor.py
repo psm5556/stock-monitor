@@ -39,12 +39,14 @@ TOLERANCE = 0.01  # ✅ 근접 임계값 ±1%
 # ==========================
 # 구글 시트에서 티커 자동 로드
 # ==========================
-# @st.cache_data(ttl=86400)
 def load_available_tickers():
-    import urllib.parse
-
-    SHEET_ID = os.environ.get("GOOGLE_SHEET_ID") #st.secrets["GOOGLE_SHEET_ID"]      # 예: "1abcdEFGHijkLMNOP"
-    SHEET_NAME = os.environ.get("GOOGLE_SHEET_NAME") #st.secrets["GOOGLE_SHEET_NAME"]  # 예: "포트폴리오"
+    # 환경변수에서 구글 시트 정보 가져오기
+    SHEET_ID = os.environ.get("GOOGLE_SHEET_ID")
+    SHEET_NAME = os.environ.get("GOOGLE_SHEET_NAME")
+    
+    if not SHEET_ID or not SHEET_NAME:
+        print("⚠️ GOOGLE_SHEET_ID 또는 GOOGLE_SHEET_NAME 환경변수가 설정되지 않았습니다.")
+        return []
 
     sheet_name_encoded = urllib.parse.quote(SHEET_NAME)
 
@@ -54,30 +56,34 @@ def load_available_tickers():
         f"tqx=out:csv&sheet={sheet_name_encoded}"
     )
 
-    # F열(티커, index 5), J열(체크, index 9)만 읽기
-    df = pd.read_csv(
-        csv_url,
-        usecols=[5, 9],              # F열=티커(index 5), J열=체크(index 9)
-        on_bad_lines="skip",
-        engine="python"
-    )
+    try:
+        # F열(티커, index 5), J열(체크, index 9)만 읽기
+        df = pd.read_csv(
+            csv_url,
+            usecols=[5, 9],              # F열=티커(index 5), J열=체크(index 9)
+            on_bad_lines="skip",
+            engine="python"
+        )
 
-    # 컬럼명 수동 지정
-    df.columns = ["티커", "체크"]
+        # 컬럼명 수동 지정
+        df.columns = ["티커", "체크"]
 
-    # 체크된 행만 필터링: TRUE / 1 / Y / ✔ 모두 허용
-    mask = df["체크"].astype(str).str.upper().isin(["TRUE", "1", "Y", "✔"])
-    tickers = (
-        df.loc[mask, "티커"]
-          .dropna()
-          .astype(str)
-          .str.upper()
-          .str.strip()
-          .unique()
-          .tolist()
-    )
+        # 체크된 행만 필터링: TRUE / 1 / Y / ✔ 모두 허용
+        mask = df["체크"].astype(str).str.upper().isin(["TRUE", "1", "Y", "✔"])
+        tickers = (
+            df.loc[mask, "티커"]
+              .dropna()
+              .astype(str)
+              .str.upper()
+              .str.strip()
+              .unique()
+              .tolist()
+        )
 
-    return tickers
+        return tickers
+    except Exception as e:
+        print(f"⚠️ 구글 시트 로드 실패: {e}")
+        return []
 
 TICKERS = load_available_tickers()
 
