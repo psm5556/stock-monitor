@@ -8,6 +8,7 @@ import yfinance as yf
 import pytz
 from datetime import datetime
 import plotly.graph_objects as go
+import time
 
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 CHAT_ID = os.environ.get('CHAT_ID')
@@ -20,80 +21,66 @@ st.title("📈 장기(200/240/365) 이동평균선 접근 모니터 — 일봉 &
 st.caption("Daily/Weekly - 근접 & 하향이탈 감지 (중복 허용)")
 
 # available_tickers = [
-#     "AAPL","ABCL","ACHR","AEP","AES","ALAB","AMD","AMZN","ANET","ARQQ","ARRY","ASML",
-#     "ASTS","AVGO","BA","BAC","BE","BEP","BLK","BMNR","BP","BTQ","BWXT","C","CARR",
-#     "CDNS","CEG","CFR.SW","CGON","CLPT","COIN","CONL","COP","COST","CRCL","CRDO",
-#     "CRM","CRSP","CSCO","CVX","D","DELL","DNA","DUK","ED","EMR","ENPH","ENR","EOSE",
-#     "EQIX","ETN","EXC","FLNC","FSLR","GEV","GLD","GOOGL","GS","HOOD","HSBC","HUBB",
-#     "IBM","INTC","IONQ","JCI","JOBY","JPM","KO","LAES","LMT","LRCX","LVMUY","MA",
-#     "MPC","MSFT","MSTR","NEE","NGG","NOC","NRG","NRGV","NTLA","NTRA","NVDA","OKLO",
-#     "ON","ORCL","OXY","PCG","PG","PLTR","PLUG","PSTG","PYPL","QBTS","QS","QUBT",
-#     "QURE","RGTI","RKLB","ROK","SBGSY","SEDG","SHEL","SIEGY","SLDP","SMR","SNPS",
-#     "SO","SOFI","SPCE","SPWR","XYZ","SRE","STEM","TLT","TMO","TSLA","TSM","TWST",
-#     "UBT","UNH","V","VLO","VRT","VST","WMT","HON","TXG","XOM","ZPTA"
+#     "RKLB","ASTS","JOBY","ACHR","NTLA","CRSP","DNA","TWST","TXG","ABCL",
+#     "RXRX","BEAM","TEM","HIMS","IONQ","QBTS","RGTI","IBM","QUBT","SMR",
+#     "OKLO","LEU","CCJ","DNA","TWST","TXG","ABCL","ARQQ","LAES","BTQ",
+#     "CLPT","NPCE","WATT","AIRJ","COIN","HOOD","CRCL","XYZ","MSTR","BMNR",
+#     "PLTR","CRM","SMCI","APP","DDOG","FIG","PATH","SYM","NBIS","IREN",
+#     "CRWV","PLUG","QS","SLDP","BE","FLNC","ENS","EOSE","TSLA","ENPH",
+#     "DUK","GEV","NEE","AES","CEG","VST","FSLR","NXT","XOM","CVX",
+#     "OXY","VRT","CARR","HON","JCI","ANET","CRDO","ALAB","MRVL","MU",
+#     "AMD","INTC","AVGO","TSM","LRCX","ON","SNPS","AMZN","MSFT","GOOGL",
+#     "META","AAPL","EQIX","PANW","CRWD","ZS","PG","KO","PEP","WMT",
+#     "COST","KMB","PM","UL","V","MA","AXP","PYPL","XYZ","SOFI",
+#     "AFRM","BLK","JPM","COF","CB","RACE","WSM","LVMUY","UNH","NTRA",
+#     "JNJ","TMO","ABT","ISRG","CVS","BSX","MRK","LLY","XYL","ECL",
+#     "AWK","DD"
 # ]
 
-available_tickers = [
-    "RKLB","ASTS","JOBY","ACHR","NTLA","CRSP","DNA","TWST","TXG","ABCL",
-    "RXRX","BEAM","TEM","HIMS","IONQ","QBTS","RGTI","IBM","QUBT","SMR",
-    "OKLO","LEU","CCJ","DNA","TWST","TXG","ABCL","ARQQ","LAES","BTQ",
-    "CLPT","NPCE","WATT","AIRJ","COIN","HOOD","CRCL","XYZ","MSTR","BMNR",
-    "PLTR","CRM","SMCI","APP","DDOG","FIG","PATH","SYM","NBIS","IREN",
-    "CRWV","PLUG","QS","SLDP","BE","FLNC","ENS","EOSE","TSLA","ENPH",
-    # "DUK","GEV","NEE","AES","CEG","VST","FSLR","NXT","XOM","CVX",
-    # "OXY","VRT","CARR","HON","JCI","ANET","CRDO","ALAB","MRVL","MU",
-    # "AMD","INTC","AVGO","TSM","LRCX","ON","SNPS","AMZN","MSFT","GOOGL",
-    # "META","AAPL","EQIX","PANW","CRWD","ZS","PG","KO","PEP","WMT",
-    # "COST","KMB","PM","UL","V","MA","AXP","PYPL","XYZ","SOFI",
-    # "AFRM","BLK","JPM","COF","CB","RACE","WSM","LVMUY","UNH","NTRA",
-    # "JNJ","TMO","ABT","ISRG","CVS","BSX","MRK","LLY","XYL","ECL",
-    # "AWK","DD"
-]
+# ==========================
+# 구글 시트에서 티커 자동 로드
+# ==========================
+@st.cache_data(ttl=86400)
+def load_available_tickers():
+    import urllib.parse
 
-# # ==========================
-# # 구글 시트에서 티커 자동 로드
-# # ==========================
-# @st.cache_data(ttl=86400)
-# def load_available_tickers():
-#     import urllib.parse
+    SHEET_ID = st.secrets["GOOGLE_SHEET_ID"]      # 예: "1abcdEFGHijkLMNOP"
+    SHEET_NAME = st.secrets["GOOGLE_SHEET_NAME"]  # 예: "포트폴리오"
 
-#     SHEET_ID = st.secrets["GOOGLE_SHEET_ID"]      # 예: "1abcdEFGHijkLMNOP"
-#     SHEET_NAME = st.secrets["GOOGLE_SHEET_NAME"]  # 예: "포트폴리오"
+    sheet_name_encoded = urllib.parse.quote(SHEET_NAME)
 
-#     sheet_name_encoded = urllib.parse.quote(SHEET_NAME)
+    # CSV Export URL
+    csv_url = (
+        f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?"
+        f"tqx=out:csv&sheet={sheet_name_encoded}"
+    )
 
-#     # CSV Export URL
-#     csv_url = (
-#         f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?"
-#         f"tqx=out:csv&sheet={sheet_name_encoded}"
-#     )
+    # F열(티커, index 5), J열(체크, index 9)만 읽기
+    df = pd.read_csv(
+        csv_url,
+        usecols=[5, 9],              # F열=티커(index 5), J열=체크(index 9)
+        on_bad_lines="skip",
+        engine="python"
+    )
 
-#     # F열(티커, index 5), J열(체크, index 9)만 읽기
-#     df = pd.read_csv(
-#         csv_url,
-#         usecols=[5, 9],              # F열=티커(index 5), J열=체크(index 9)
-#         on_bad_lines="skip",
-#         engine="python"
-#     )
+    # 컬럼명 수동 지정
+    df.columns = ["티커", "체크"]
 
-#     # 컬럼명 수동 지정
-#     df.columns = ["티커", "체크"]
+    # 체크된 행만 필터링: TRUE / 1 / Y / ✔ 모두 허용
+    mask = df["체크"].astype(str).str.upper().isin(["TRUE", "1", "Y", "✔"])
+    tickers = (
+        df.loc[mask, "티커"]
+          .dropna()
+          .astype(str)
+          .str.upper()
+          .str.strip()
+          .unique()
+          .tolist()
+    )
 
-#     # 체크된 행만 필터링: TRUE / 1 / Y / ✔ 모두 허용
-#     mask = df["체크"].astype(str).str.upper().isin(["TRUE", "1", "Y", "✔"])
-#     tickers = (
-#         df.loc[mask, "티커"]
-#           .dropna()
-#           .astype(str)
-#           .str.upper()
-#           .str.strip()
-#           .unique()
-#           .tolist()
-#     )
+    return tickers
 
-#     return tickers
-
-# available_tickers = load_available_tickers()
+available_tickers = load_available_tickers()
 
 @st.cache_data(ttl=86400)
 def get_company_name(symbol):
@@ -124,11 +111,6 @@ def get_price(symbol, interval="1d"):
     df.dropna(inplace=True)
     return df if not df.empty else None
 
-
-# def is_downtrend(df, lookback=20):
-#     if len(df) < lookback + 1:
-#         return False
-#     return (df["Close"].iloc[-1] - df["Close"].iloc[-lookback]) < 0
 
 def is_downtrend(df, lookback=20):
     if len(df) < lookback + 1:
@@ -214,11 +196,63 @@ def build_alert_message(results):
     return msg
 
 
+# ✅ 메시지 분할 전송 함수
 def send_telegram(msg):
     if not BOT_TOKEN or not CHAT_ID:
         return
-    requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
-                  json={"chat_id":CHAT_ID,"text":msg})
+    
+    MAX_LENGTH = 4000  # 안전 마진 포함 (텔레그램 제한 4096자)
+    
+    # 메시지가 짧으면 그냥 전송
+    if len(msg) <= MAX_LENGTH:
+        try:
+            requests.post(
+                f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+                json={"chat_id": CHAT_ID, "text": msg}
+            )
+        except Exception as e:
+            st.error(f"텔레그램 전송 실패: {e}")
+        return
+    
+    # 메시지가 길면 줄바꿈 기준으로 분할
+    lines = msg.split('\n')
+    current_msg = ""
+    msg_count = 1
+    
+    for i, line in enumerate(lines):
+        # 다음 줄을 추가했을 때 길이 체크
+        test_msg = current_msg + line + "\n"
+        
+        if len(test_msg) > MAX_LENGTH:
+            # 현재 메시지 전송
+            if current_msg:
+                try:
+                    requests.post(
+                        f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+                        json={"chat_id": CHAT_ID, "text": current_msg.strip()}
+                    )
+                    time.sleep(0.5)  # 연속 전송 시 딜레이
+                    msg_count += 1
+                except Exception as e:
+                    st.error(f"텔레그램 전송 실패 (Part {msg_count}): {e}")
+            
+            # 새 메시지 시작 (헤더 정보 유지)
+            if msg_count > 1:
+                current_msg = f"📬 [계속...] Part {msg_count}\n\n{line}\n"
+            else:
+                current_msg = line + "\n"
+        else:
+            current_msg = test_msg
+    
+    # 마지막 남은 메시지 전송
+    if current_msg.strip():
+        try:
+            requests.post(
+                f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+                json={"chat_id": CHAT_ID, "text": current_msg.strip()}
+            )
+        except Exception as e:
+            st.error(f"텔레그램 전송 실패 (최종): {e}")
 
 
 # ✅ 최초 1회 자동 전송
@@ -228,7 +262,9 @@ if "scan" not in st.session_state:
     for s in available_tickers:
         r = detect_symbol(s)
         if r["daily"] or r["weekly"]: res.append(r)
-    send_telegram(build_alert_message(res))
+    
+    msg = build_alert_message(res)
+    send_telegram(msg)
     st.success("✅ Telegram 발송 완료!")
 
 
