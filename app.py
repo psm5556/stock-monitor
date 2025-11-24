@@ -40,14 +40,14 @@ available_tickers = [
     "CLPT","NPCE","WATT","AIRJ","COIN","HOOD","CRCL","XYZ","MSTR","BMNR",
     "PLTR","CRM","SMCI","APP","DDOG","FIG","PATH","SYM","NBIS","IREN",
     "CRWV","PLUG","QS","SLDP","BE","FLNC","ENS","EOSE","TSLA","ENPH",
-    "DUK","GEV","NEE","AES","CEG","VST","FSLR","NXT","XOM","CVX",
-    "OXY","VRT","CARR","HON","JCI","ANET","CRDO","ALAB","MRVL","MU",
-    "AMD","INTC","AVGO","TSM","LRCX","ON","SNPS","AMZN","MSFT","GOOGL",
-    "META","AAPL","EQIX","PANW","CRWD","ZS","PG","KO","PEP","WMT",
-    "COST","KMB","PM","UL","V","MA","AXP","PYPL","XYZ","SOFI",
-    "AFRM","BLK","JPM","COF","CB","RACE","WSM","LVMUY","UNH","NTRA",
-    "JNJ","TMO","ABT","ISRG","CVS","BSX","MRK","LLY","XYL","ECL",
-    "AWK","DD"
+    # "DUK","GEV","NEE","AES","CEG","VST","FSLR","NXT","XOM","CVX",
+    # "OXY","VRT","CARR","HON","JCI","ANET","CRDO","ALAB","MRVL","MU",
+    # "AMD","INTC","AVGO","TSM","LRCX","ON","SNPS","AMZN","MSFT","GOOGL",
+    # "META","AAPL","EQIX","PANW","CRWD","ZS","PG","KO","PEP","WMT",
+    # "COST","KMB","PM","UL","V","MA","AXP","PYPL","XYZ","SOFI",
+    # "AFRM","BLK","JPM","COF","CB","RACE","WSM","LVMUY","UNH","NTRA",
+    # "JNJ","TMO","ABT","ISRG","CVS","BSX","MRK","LLY","XYL","ECL",
+    # "AWK","DD"
 ]
 
 # # ==========================
