@@ -51,7 +51,7 @@ TICKERS = [
 # # ==========================
 # # 구글 시트에서 티커 자동 로드
 # # ==========================
-# @st.cache_data
+# @st.cache_data(ttl=86400)
 # def load_available_tickers():
 #     import urllib.parse
 
