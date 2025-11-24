@@ -31,67 +31,67 @@ TOLERANCE = 0.01  # ✅ 근접 임계값 ±1%
 #     "UBT","UNH","V","VLO","VRT","VST","WMT","HON","TXG","XOM","ZPTA"
 # ]
 
-# TICKERS = [
-    # "RKLB","ASTS","JOBY","ACHR","NTLA","CRSP","DNA","TWST","TXG","ABCL",
-    # "RXRX","BEAM","TEM","HIMS","IONQ","QBTS","RGTI","IBM","QUBT","SMR",
-    # "OKLO","LEU","CCJ","DNA","TWST","TXG","ABCL","ARQQ","LAES","BTQ",
-    # "CLPT","NPCE","WATT","AIRJ","COIN","HOOD","CRCL","XYZ","MSTR","BMNR",
-    # "PLTR","CRM","SMCI","APP","DDOG","FIG","PATH","SYM","NBIS","IREN",
-    # "CRWV","PLUG","QS","SLDP","BE","FLNC","ENS","EOSE","TSLA","ENPH",
-    # "DUK","GEV","NEE","AES","CEG","VST","FSLR","NXT","XOM","CVX",
-    # "OXY","VRT","CARR","HON","JCI","ANET","CRDO","ALAB","MRVL","MU",
-    # "AMD","INTC","AVGO","TSM","LRCX","ON","SNPS","AMZN","MSFT","GOOGL",
-    # "META","AAPL","EQIX","PANW","CRWD","ZS","PG","KO","PEP","WMT",
-    # "COST","KMB","PM","UL","V","MA","AXP","PYPL","XYZ","SOFI",
-    # "AFRM","BLK","JPM","COF","CB","RACE","WSM","LVMUY","UNH","NTRA",
-    # "JNJ","TMO","ABT","ISRG","CVS","BSX","MRK","LLY","XYL","ECL",
-    # "AWK","DD"
-# ]
+TICKERS = [
+    "RKLB","ASTS","JOBY","ACHR","NTLA","CRSP","DNA","TWST","TXG","ABCL",
+    "RXRX","BEAM","TEM","HIMS","IONQ","QBTS","RGTI","IBM","QUBT","SMR",
+    "OKLO","LEU","CCJ","DNA","TWST","TXG","ABCL","ARQQ","LAES","BTQ",
+    "CLPT","NPCE","WATT","AIRJ","COIN","HOOD","CRCL","XYZ","MSTR","BMNR",
+    "PLTR","CRM","SMCI","APP","DDOG","FIG","PATH","SYM","NBIS","IREN",
+    "CRWV","PLUG","QS","SLDP","BE","FLNC","ENS","EOSE","TSLA","ENPH",
+    "DUK","GEV","NEE","AES","CEG","VST","FSLR","NXT","XOM","CVX",
+    "OXY","VRT","CARR","HON","JCI","ANET","CRDO","ALAB","MRVL","MU",
+    "AMD","INTC","AVGO","TSM","LRCX","ON","SNPS","AMZN","MSFT","GOOGL",
+    "META","AAPL","EQIX","PANW","CRWD","ZS","PG","KO","PEP","WMT",
+    "COST","KMB","PM","UL","V","MA","AXP","PYPL","XYZ","SOFI",
+    "AFRM","BLK","JPM","COF","CB","RACE","WSM","LVMUY","UNH","NTRA",
+    "JNJ","TMO","ABT","ISRG","CVS","BSX","MRK","LLY","XYL","ECL",
+    "AWK","DD"
+]
 
-# ==========================
-# 구글 시트에서 티커 자동 로드
-# ==========================
-@st.cache_data
-def load_available_tickers():
-    import urllib.parse
+# # ==========================
+# # 구글 시트에서 티커 자동 로드
+# # ==========================
+# @st.cache_data
+# def load_available_tickers():
+#     import urllib.parse
 
-    SHEET_ID = st.secrets["GOOGLE_SHEET_ID"]      # 예: "1abcdEFGHijkLMNOP"
-    SHEET_NAME = st.secrets["GOOGLE_SHEET_NAME"]  # 예: "포트폴리오"
+#     SHEET_ID = st.secrets["GOOGLE_SHEET_ID"]      # 예: "1abcdEFGHijkLMNOP"
+#     SHEET_NAME = st.secrets["GOOGLE_SHEET_NAME"]  # 예: "포트폴리오"
 
-    sheet_name_encoded = urllib.parse.quote(SHEET_NAME)
+#     sheet_name_encoded = urllib.parse.quote(SHEET_NAME)
 
-    # CSV Export URL
-    csv_url = (
-        f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?"
-        f"tqx=out:csv&sheet={sheet_name_encoded}"
-    )
+#     # CSV Export URL
+#     csv_url = (
+#         f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?"
+#         f"tqx=out:csv&sheet={sheet_name_encoded}"
+#     )
 
-    # F열(티커, index 5), J열(체크, index 9)만 읽기
-    df = pd.read_csv(
-        csv_url,
-        usecols=[5, 9],              # F열=티커(index 5), J열=체크(index 9)
-        on_bad_lines="skip",
-        engine="python"
-    )
+#     # F열(티커, index 5), J열(체크, index 9)만 읽기
+#     df = pd.read_csv(
+#         csv_url,
+#         usecols=[5, 9],              # F열=티커(index 5), J열=체크(index 9)
+#         on_bad_lines="skip",
+#         engine="python"
+#     )
 
-    # 컬럼명 수동 지정
-    df.columns = ["티커", "체크"]
+#     # 컬럼명 수동 지정
+#     df.columns = ["티커", "체크"]
 
-    # 체크된 행만 필터링: TRUE / 1 / Y / ✔ 모두 허용
-    mask = df["체크"].astype(str).str.upper().isin(["TRUE", "1", "Y", "✔"])
-    tickers = (
-        df.loc[mask, "티커"]
-          .dropna()
-          .astype(str)
-          .str.upper()
-          .str.strip()
-          .unique()
-          .tolist()
-    )
+#     # 체크된 행만 필터링: TRUE / 1 / Y / ✔ 모두 허용
+#     mask = df["체크"].astype(str).str.upper().isin(["TRUE", "1", "Y", "✔"])
+#     tickers = (
+#         df.loc[mask, "티커"]
+#           .dropna()
+#           .astype(str)
+#           .str.upper()
+#           .str.strip()
+#           .unique()
+#           .tolist()
+#     )
 
-    return tickers
+#     return tickers
 
-TICKERS = load_available_tickers()
+# TICKERS = load_available_tickers()
 
 def get_company_name(symbol):
     try:
